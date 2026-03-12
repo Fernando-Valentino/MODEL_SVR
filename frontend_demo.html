@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediksi Retribusi Parkir Dishub Cirebon</title>
+    <!-- Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --success-hover: #059669;
+            --dark: #1f2937;
+            --gray: #6b7280;
+            --light: #f3f4f6;
+            --white: #ffffff;
+            --border: #e5e7eb;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%);
+            color: var(--dark);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1000px; /* Lebihin dikit buat tabel */
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: var(--gray);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Step Card Styling */
+        .step-card {
+            background: var(--white);
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border: 1px solid var(--border);
+            margin-bottom: 2rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+        }
+        
+        /* The hidden state for sequential revealing */
+        .step-hidden {
+            display: none;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUP 0.5s forwards;
+        }
+
+        @keyframes fadeInUP {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .step-card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .step-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary);
+        }
+        
+        .step-desc {
+            font-size: 0.9rem;
+            color: var(--gray);
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--gray);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            font-family: inherit;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            background-color: var(--light);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            box-sizing: border-box;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+            background-color: var(--white);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            width: 100%;
+            font-family: inherit;
+        }
+
+        .btn-primary { background-color: var(--primary); color: var(--white); }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        
+        .btn-success { background-color: var(--success); color: var(--white); }
+        .btn-success:hover { background-color: var(--success-hover); }
+        
+        .btn:active { transform: translateY(1px); }
+        .btn:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+
+        .loader {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: var(--white);
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 0.5rem;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Metrik Grid (Step 4) */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .metric-box {
+            background: var(--light);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+        }
+
+        .metric-box h4 {
+            margin: 0 0 1rem 0;
+            font-size: 1rem;
+            color: var(--dark);
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .metric-value { font-weight: 600; color: var(--dark); }
+        .metric-winner { color: var(--success); font-weight: 700; }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            display: none;
+        }
+
+        .alert-success { background-color: #d1fae5; color: #065f46; border: 1px solid #10b981; }
+        .alert-danger { background-color: #fee2e2; color: #b91c1c; border: 1px solid #ef4444; }
+
+        /* Tables */
+        .table-responsive {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+        
+        th, td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+        
+        th {
+            background-color: var(--light);
+            font-weight: 600;
+            color: var(--gray);
+        }
+        
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background-color: #fafafa; }
+
+        /* Chart container */
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+            margin-top: 2rem;
+            display: none;
+        }
+
+        .summary-box {
+            background: var(--primary);
+            color: var(--white);
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            margin-top: 1.5rem;
+            display: none;
+        }
+        
+        .summary-box h3 { margin: 0 0 0.5rem 0; font-size: 1.1rem; font-weight: 500; opacity: 0.9; }
+        .summary-box .amount { font-size: 2.5rem; font-weight: 700; margin: 0; }
+        
+        .recommendation-box {
+            background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; border-radius: 0.5rem;
+            margin-top: 1.5rem; font-size: 0.95rem; color: #92400e; display: none;
+        }
+        .recommendation-box h4 { margin: 0 0 0.5rem 0; color: #b45309; }
+        
+        /* Connecting Line between steps */
+        .step-connector {
+            width: 4px;
+            height: 30px;
+            background: var(--border);
+            margin: -2rem auto 0 auto;
+            border-radius: 2px;
+            position: relative;
+            z-index: -1;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header class="header">
+            <h1>Sistem Prediksi Retribusi Parkir<br><span style="font-size: 1.4rem; font-weight: 500; color: var(--gray);">Komparasi SVR + Grid Search & SVR + Grey Wolf Optimizer (GWO)</span></h1>
+            <p style="margin-top: 5px;">Dinas Perhubungan Kota Cirebon. Visualisasi Alur Penelitian Machine Learning (Skripsi Overview).</p>
+        </header>
+
+        <!-- STEP 1: UPLOAD -->
+        <div class="step-card" id="step1">
+            <h2 class="step-title">📥 Tahap 1: Ekstraksi Data (Data Gathering)</h2>
+            <p class="step-desc">Silakan unggah histori data penerimaan retribusi parkir berformat CSV. Mesin akan mengekstrak informasi yang relevan.</p>
+            
+            <div class="form-group">
+                <input type="file" id="csvFile" accept=".csv" class="form-control">
+            </div>
+            
+            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <button class="btn btn-primary" id="btnUpload" onclick="uploadDataset()" style="display: inline-flex; align-items: center;">
+                    <span id="txtUpload">Mulai Pemrosesan AI</span>
+                    <div class="loader" id="loaderUpload"></div>
+                </button>
+                <span id="timerUpload" style="font-weight: 700; color: var(--danger); font-size: 1.1rem; display: none;">⏱️ 00:00</span>
+            </div>
+
+            <div style="display: flex; align-items: center; margin: 1.25rem 0; gap: 10px;">
+                <hr style="flex: 1; border-color: var(--border);">
+                <span style="color: var(--gray); font-size: 0.85rem; white-space: nowrap;">ATAU (Jika Sudah Pernah Training)</span>
+                <hr style="flex: 1; border-color: var(--border);">
+            </div>
+
+            <button class="btn btn-success" id="btnLoadExisting" onclick="loadExistingModel()" style="display: inline-flex; align-items: center;">
+                <span id="txtLoadExisting">⚡ Lanjutkan dengan Model Sebelumnya</span>
+                <div class="loader" id="loaderLoadExisting"></div>
+            </button>
+            <p style="font-size: 0.8rem; color: var(--gray); margin-top: 0.5rem;">
+                Jika dataset sudah pernah diupload sebelumnya, langsung tampilkan hasil training & prediksi tanpa training ulang.
+            </p>
+
+            <div id="alertUpload" class="alert" style="margin-top: 15px;"></div>
+        </div>
+
+        <!-- STEP 2: RAW DATA EXPLORATION -->
+        <div class="step-hidden" id="step2Block">
+            <div class="step-connector"></div>
+            <div class="step-card">
+                <h2 class="step-title">📊 Tahap 2: Eksplorasi Data Mentah (EDA)</h2>
+                <p class="step-desc">Sistem mem-parsing data CSV menjadi Dataframe Pandas. Ini adalah 5 sampel baris pertama (sebelum disentuh preprocessing). Terlihat bentuk teks ('Senin', 'Hari Kerja') masih mendominasi.</p>
+                
+                <div class="table-responsive">
+                    <table id="rawDataTable">
+                        <thead>
+                            <!-- TH generated dynamically -->
+                        </thead>
+                        <tbody>
+                            <!-- TD generated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- STEP 3: PREPROCESSING -->
+        <div class="step-hidden" id="step3Block">
+            <div class="step-connector"></div>
+            <div class="step-card">
+                <h2 class="step-title">⚙️ Tahap 3: Preprocessing & Normalisasi (MinMax Scaler)</h2>
+                <p class="step-desc">Algoritma SVR tidak mengerti huruf abjad dan nominal jutaan rupiah yang timpang. Sistem melakukan <strong>Label Encoding</strong> (Senin=1) dan <strong>Normalisasi</strong> jangkauan rentang menjadi angka 0 s/d 1 untuk setiap fiturnya.</p>
+                
+                <div class="table-responsive">
+                    <table id="preprocessedDataTable">
+                        <thead>
+                            <tr id="prepTableHead">
+                                <!-- TH generated dynamically based on feature list -->
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- TD generated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 4: MODEL TRAINING & EVALUATION -->
+        <div class="step-hidden" id="step4Block">
+            <div class="step-connector"></div>
+            <div class="step-card">
+                <h2 class="step-title">🧠 Tahap 4: Pelatihan Model (Training) & Evaluasi (Komparasi)</h2>
+                <p class="step-desc">Data normalisasi dipotong dengan rasio 80:20 (Train / Test). Model dilatih menggunakan Support Vector Regression (SVR). Pada tahap ini dilakukan studi komparasi performa antara metode optimasi <strong>Grid Search</strong> versus algoritma cerdas <strong>Grey Wolf Optimizer</strong> untuk mencari performa prediksi terbaik.</p>
+                
+                <div class="metrics-grid" id="metricsGrid" style="display: grid;">
+                    <div class="metric-box">
+                        <h4>SVR + Grid Search CV</h4>
+                        <div class="metric-item"><span>MSE:</span> <span class="metric-value" id="gs-mse">-</span></div>
+                        <div class="metric-item" style="font-size:0.8rem; color:var(--gray); padding-left: 0.5rem;"><span>MSE (%):</span> <span id="gs-mse-pct">-</span></div>
+                        <div class="metric-item"><span>RMSE:</span> <span class="metric-value" id="gs-rmse">-</span></div>
+                        <div class="metric-item" style="font-size:0.8rem; color:var(--gray); padding-left: 0.5rem;"><span>CV-RMSE (%):</span> <span id="gs-rmse-pct">-</span></div>
+                        <div class="metric-item"><span>MAE:</span> <span class="metric-value" id="gs-mae">-</span></div>
+                        <div class="metric-item" style="font-size:0.8rem; color:var(--gray); padding-left: 0.5rem;"><span>MAE (%):</span> <span id="gs-mae-pct">-</span></div>
+                        <div class="metric-item"><span>MAPE:</span> <span class="metric-value" id="gs-mape">-</span></div>
+                        <div class="metric-item"><span>Akurasi (R²):</span> <span class="metric-value" id="gs-akurasi" style="color: var(--primary); font-weight: bold;">-</span></div>
+                        <div class="metric-item"><span>R² Score:</span> <span class="metric-value" id="gs-r2">-</span></div>
+                    </div>
+                    <div class="metric-box">
+                        <h4>SVR + Grey Wolf Optimizer</h4>
+                        <div class="metric-item"><span>MSE:</span> <span class="metric-value metric-winner" id="gwo-mse">-</span></div>
+                        <div class="metric-item" style="font-size:0.8rem; color:var(--gray); padding-left: 0.5rem;"><span>MSE (%):</span> <span id="gwo-mse-pct">-</span></div>
+                        <div class="metric-item"><span>RMSE:</span> <span class="metric-value metric-winner" id="gwo-rmse">-</span></div>
+                        <div class="metric-item" style="font-size:0.8rem; color:var(--gray); padding-left: 0.5rem;"><span>CV-RMSE (%):</span> <span id="gwo-rmse-pct">-</span></div>
+                        <div class="metric-item"><span>MAE:</span> <span class="metric-value metric-winner" id="gwo-mae">-</span></div>
+                        <div class="metric-item" style="font-size:0.8rem; color:var(--gray); padding-left: 0.5rem;"><span>MAE (%):</span> <span id="gwo-mae-pct">-</span></div>
+                        <div class="metric-item"><span>MAPE:</span> <span class="metric-value metric-winner" id="gwo-mape">-</span></div>
+                        <div class="metric-item"><span>Akurasi (R²):</span> <span class="metric-value metric-winner" id="gwo-akurasi" style="color: var(--success); font-weight: bold;">-</span></div>
+                        <div class="metric-item"><span>R² Score:</span> <span class="metric-value metric-winner" id="gwo-r2">-</span></div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 2rem; border-top: 1px dashed var(--border); padding-top: 1.5rem; text-align: center;">
+                    <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
+                        <button class="btn btn-primary" id="btnRetrain" onclick="retrainModel()" style="width: auto; padding: 0.5rem 1.5rem; font-size: 0.95rem;">
+                            <span id="txtRetrain">🔄 Latih Ulang SVR (Gacha Error Terkecil)</span>
+                            <div class="loader" id="loaderRetrain" style="width: 15px; height: 15px; border-width: 2px;"></div>
+                        </button>
+                        <span id="timerRetrain" style="font-weight: 700; color: var(--danger); font-size: 1.1rem; display: none;">⏱️ 00:00</span>
+                    </div>
+                    <p id="progressGwo" style="font-size: 0.85rem; color: var(--gray); margin-top: 0.75rem; max-width: 600px; margin-left: auto; margin-right: auto;">
+                        Belum puas dengan hasil metrik di atas? Klik tombol ini berkali-kali. AI Grey Wolf Optimizer akan mereset dan menyebar ulang posisi pasukan serigalanya secara acak untuk mencoba mendobrak <strong>Error sekecil mungkin</strong>! 
+                        <br><i>(Peringatan: Pencarian mendalam butuh waktu ~20-50 detik iterasi)</i>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 5: PREDICTION AUTOREGRESSIVE -->
+        <div class="step-hidden" id="step5Block">
+            <div class="step-connector"></div>
+            <div class="step-card">
+                <h2 class="step-title">📈 Tahap 5: Prediksi Tetes-Masa-Depan (Autoregressive Engine) </h2>
+                <p class="step-desc">Model telah siap di Memory RAM! Masukkan rentang tanggal masa depan. Model akan menelusuri memori masa lalu dan melakukan prediksi secara berantai *rolling window*.</p>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label for="startDate">Tanggal Mulai</label>
+                        <input type="date" id="startDate" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="endDate">Tanggal Akhir</label>
+                        <input type="date" id="endDate" class="form-control">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="holidays">Tambahan Tanggal Libur/Cuti Bersama Ekstra (Opsional)</label>
+                    <input type="text" id="holidays" class="form-control" placeholder="Kalender Merah otomatis dideteksi AI. Isi tanggal ini bila ada Cuti (Misal: 2025-05-01)">
+                </div>
+
+                <button class="btn btn-success" id="btnPredict" onclick="runPrediction()">
+                    <span id="txtPredict">Lakukan Prediksi</span>
+                    <div class="loader" id="loaderPredict"></div>
+                </button>
+
+                <div id="alertPredict" class="alert"></div>
+
+                <div class="summary-box" id="summaryBox">
+                    <h3>Estimasi Total Pendapatan (<span id="totalDays">0</span> Hari)</h3>
+                    <p class="amount" id="totalRevenue">Rp 0</p>
+                </div>
+
+                <div class="recommendation-box" id="recommendationBox">
+                    <h4>💡 Saran & Rekomendasi Dishub:</h4>
+                    <p id="recText"></p>
+                </div>
+
+                <div class="chart-container" id="chartContainer">
+                    <canvas id="predictionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+        const API_KEY = "rahasia-api-key-laravel-123";
+        let revenueChart = null;
+
+        const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number);
+
+        // Helper terpusat: isi semua field metrik ke tabel UI
+        function fillMetrics(gs, gwo) {
+            document.getElementById('gs-mse').innerText = gs.MSE.toLocaleString('id-ID');
+            document.getElementById('gs-mse-pct').innerText = gs.MSE_pct || '-';
+            document.getElementById('gs-rmse').innerText = gs.RMSE.toLocaleString('id-ID');
+            document.getElementById('gs-rmse-pct').innerText = gs.RMSE_pct || '-';
+            document.getElementById('gs-mae').innerText = gs.MAE.toLocaleString('id-ID');
+            document.getElementById('gs-mae-pct').innerText = gs.MAE_pct || '-';
+            document.getElementById('gs-mape').innerText = gs.MAPE;
+            // Akurasi selalu dihitung dari R2 (bisa handle format lama maupun baru)
+            document.getElementById('gs-akurasi').innerText = (gs.R2 * 100).toFixed(2) + ' %';
+            document.getElementById('gs-r2').innerText = gs.R2.toFixed(4);
+
+            document.getElementById('gwo-mse').innerText = gwo.MSE.toLocaleString('id-ID');
+            document.getElementById('gwo-mse-pct').innerText = gwo.MSE_pct || '-';
+            document.getElementById('gwo-rmse').innerText = gwo.RMSE.toLocaleString('id-ID');
+            document.getElementById('gwo-rmse-pct').innerText = gwo.RMSE_pct || '-';
+            document.getElementById('gwo-mae').innerText = gwo.MAE.toLocaleString('id-ID');
+            document.getElementById('gwo-mae-pct').innerText = gwo.MAE_pct || '-';
+            document.getElementById('gwo-mape').innerText = gwo.MAPE;
+            // Akurasi selalu dihitung dari R2 (bisa handle format lama maupun baru)
+            document.getElementById('gwo-akurasi').innerText = (gwo.R2 * 100).toFixed(2) + ' %';
+            document.getElementById('gwo-r2').innerText = gwo.R2.toFixed(4);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+             let t1 = new Date(); t1.setDate(t1.getDate() + 1);
+             let t2 = new Date(); t2.setDate(t2.getDate() + 7);
+             document.getElementById('startDate').value = t1.toISOString().split('T')[0];
+             document.getElementById('endDate').value = t2.toISOString().split('T')[0];
+        });
+
+        // Delay helper for UI animations sequence
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+
+        // Stopwatch Helper Function
+        function startTimer(elementId) {
+            const el = document.getElementById(elementId);
+            el.style.display = 'inline-block';
+            el.innerText = '⏱️ 00:00';
+            let startTime = Date.now();
+            return setInterval(() => {
+                const diff = Math.floor((Date.now() - startTime) / 1000);
+                const mins = String(Math.floor(diff / 60)).padStart(2, '0');
+                const secs = String(diff % 60).padStart(2, '0');
+                el.innerText = `⏱️ ${mins}:${secs}`;
+            }, 1000);
+        }
+
+        // ==========================================
+        // 1. UPLOAD & RETRAIN SVR GWO (PIPELINE)
+        // ==========================================
+        async function uploadDataset() {
+            const fileInput = document.getElementById('csvFile');
+            const alertBox = document.getElementById('alertUpload');
+            const btn = document.getElementById('btnUpload');
+            const loader = document.getElementById('loaderUpload');
+            const txt = document.getElementById('txtUpload');
+
+            // Reset UI states
+            document.getElementById('step2Block').style.display = 'none';
+            document.getElementById('step3Block').style.display = 'none';
+            document.getElementById('step4Block').style.display = 'none';
+            document.getElementById('step5Block').style.display = 'none';
+
+            if (fileInput.files.length === 0) {
+                showAlert(alertBox, 'Pilih file CSV terlebih dahulu', 'danger');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            btn.disabled = true;
+            loader.style.display = 'inline-block';
+            txt.innerText = 'Menganalisis & Melatih Model..';
+            alertBox.style.display = 'none';
+            
+            // Start Stopwatch for Upload Phase
+            const timerId = startTimer('timerUpload');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/upload-dataset`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    showAlert(alertBox, 'Error server FastAPI. Data gagal diproses.', 'danger');
+                    throw new Error('Network crash');
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let done = false;
+                let textBuffer = '';
+
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    done = readerDone;
+                    if (value) {
+                        textBuffer += decoder.decode(value, { stream: true });
+                        const lines = textBuffer.split('\n');
+                        textBuffer = lines.pop(); 
+
+                        for (let line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const dataStr = line.replace('data: ', '');
+                                if(dataStr) {
+                                    const data = JSON.parse(dataStr);
+                                    
+                                    if(data.type === 'info') {
+                                        txt.innerHTML = `<strong><span style="color:var(--primary)">Processing:</span></strong> ${data.message}`;
+                                    } else if(data.type === 'progress') {
+                                        txt.innerHTML = `<strong><span style="color:var(--success)">SVR GWO Live:</span></strong> ${data.message}`;
+                                    } else if(data.type === 'error') {
+                                        showAlert(alertBox, `Gagal: ${data.message}`, 'danger');
+                                        break;
+                                    } else if(data.type === 'complete') {
+                                        
+                                        showAlert(alertBox, "Proses Pipeline selesai!", 'success');
+                                        
+                                        // Render STEP 2: Raw Data Table
+                                        if (data.pipeline_data && data.pipeline_data.raw_data && data.pipeline_data.raw_data.length > 0) {
+                                            const rawData = data.pipeline_data.raw_data;
+                                            const columns = Object.keys(rawData[0]);
+                                            
+                                            let headHtml = '<tr>' + columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
+                                            document.querySelector('#rawDataTable thead').innerHTML = headHtml;
+                                            
+                                            let bodyHtml = '';
+                                            rawData.forEach(row => {
+                                                bodyHtml += '<tr>' + columns.map(c => `<td>${row[c]}</td>`).join('') + '</tr>';
+                                            });
+                                            document.querySelector('#rawDataTable tbody').innerHTML = bodyHtml;
+                                            
+                                            // Show Step 2
+                                            document.getElementById('step2Block').style.display = 'block';
+                                            document.getElementById('step2Block').classList.add('step-hidden'); // Re-trigger animation
+                                            await delay(800);
+                                        }
+                                        
+                                        // Render STEP 3: Preprocessed Data Table
+                                        if (data.pipeline_data && data.pipeline_data.preprocessed_data && data.pipeline_data.preprocessed_data.length > 0) {
+                                            const prepData = data.pipeline_data.preprocessed_data;
+                                            const features = data.pipeline_data.fitur_list || [];
+                                            
+                                            // Header prep
+                                            let prepHeadHtml = features.map(f => `<th>${f}</th>`).join('');
+                                            prepHeadHtml += `<th><span style="color:var(--primary)">Target (Scaled)</span></th>`;
+                                            document.getElementById('prepTableHead').innerHTML = prepHeadHtml;
+                                            
+                                            // Body prep
+                                            let prepBodyHtml = '';
+                                            prepData.forEach((row, index) => {
+                                                let tr = '<tr>';
+                                                features.forEach((f, idx) => {
+                                                    tr += `<td>${row['Fitur_X'+(idx+1)]}</td>`;
+                                                });
+                                                tr += `<td><strong>${row['Target_y']}</strong></td></tr>`;
+                                                prepBodyHtml += tr;
+                                            });
+                                            document.querySelector('#preprocessedDataTable tbody').innerHTML = prepBodyHtml;
+                                            
+                                            // Show Step 3
+                                            document.getElementById('step3Block').style.display = 'block';
+                                            document.getElementById('step3Block').classList.add('step-hidden');
+                                            await delay(800);
+                                        }
+
+                                        // Render STEP 4: Metrics Comparison
+                                        if (data.komparasi_model && data.komparasi_model.SVR_GridSearch) {
+                                            const gs = data.komparasi_model.SVR_GridSearch;
+                                            const gwo = data.komparasi_model.SVR_GWO;
+                                            fillMetrics(gs, gwo);
+
+                                            // Show Step 4
+                                            document.getElementById('step4Block').style.display = 'block';
+                                            document.getElementById('step4Block').classList.add('step-hidden');
+                                            await delay(1000);
+                                            
+                                            // Show Step 5
+                                            document.getElementById('step5Block').style.display = 'block';
+                                            document.getElementById('step5Block').classList.add('step-hidden');
+                                            
+                                            // Scroll nicely to Step 4
+                                            document.getElementById('step4Block').scrollIntoView({behavior: "smooth", block: "start"});
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            } catch (error) {
+                showAlert(alertBox, `Koneksi ke API terputus atau format stream rusak.`, 'danger');
+                console.error(error);
+            } finally {
+                clearInterval(timerId); // Stop running time
+                btn.disabled = false;
+                loader.style.display = 'none';
+                txt.innerText = 'Unggah Dataset Baru';
+            }
+        }
+
+        // ==========================================
+        // 1b. LOAD MODEL SEBELUMNYA (SKIP TRAINING)
+        // ==========================================
+        async function loadExistingModel() {
+            const alertBox = document.getElementById('alertUpload');
+            const btn = document.getElementById('btnLoadExisting');
+            const loader = document.getElementById('loaderLoadExisting');
+            const txt = document.getElementById('txtLoadExisting');
+
+            // Reset step blocks
+            document.getElementById('step2Block').style.display = 'none';
+            document.getElementById('step3Block').style.display = 'none';
+            document.getElementById('step4Block').style.display = 'none';
+            document.getElementById('step5Block').style.display = 'none';
+
+            btn.disabled = true;
+            loader.style.display = 'inline-block';
+            txt.innerText = 'Memuat data & model sebelumnya...';
+            alertBox.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/load-existing`, {
+                    method: 'GET',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showAlert(alertBox, data.detail || 'Belum ada model sebelumnya. Silakan upload dataset terlebih dahulu.', 'danger');
+                    return;
+                }
+
+                showAlert(alertBox, '⚡ Model sebelumnya berhasil dimuat! Menampilkan hasil...', 'success');
+
+                // Render STEP 2: Raw Data Table
+                if (data.pipeline_data && data.pipeline_data.raw_data && data.pipeline_data.raw_data.length > 0) {
+                    const rawData = data.pipeline_data.raw_data;
+                    const columns = Object.keys(rawData[0]);
+                    let headHtml = '<tr>' + columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
+                    document.querySelector('#rawDataTable thead').innerHTML = headHtml;
+                    let bodyHtml = '';
+                    rawData.forEach(row => {
+                        bodyHtml += '<tr>' + columns.map(c => `<td>${row[c]}</td>`).join('') + '</tr>';
+                    });
+                    document.querySelector('#rawDataTable tbody').innerHTML = bodyHtml;
+                    document.getElementById('step2Block').style.display = 'block';
+                    await delay(600);
+                }
+
+                // Render STEP 3: Preprocessed Data Table
+                if (data.pipeline_data && data.pipeline_data.preprocessed_data && data.pipeline_data.preprocessed_data.length > 0) {
+                    const prepData = data.pipeline_data.preprocessed_data;
+                    const features = data.pipeline_data.fitur_list || [];
+                    let prepHeadHtml = features.map(f => `<th>${f}</th>`).join('');
+                    prepHeadHtml += `<th><span style="color:var(--primary)">Target (Scaled)</span></th>`;
+                    document.getElementById('prepTableHead').innerHTML = prepHeadHtml;
+                    let prepBodyHtml = '';
+                    prepData.forEach((row, index) => {
+                        let tr = '<tr>';
+                        features.forEach((f, idx) => {
+                            tr += `<td>${row['Fitur_X'+(idx+1)]}</td>`;
+                        });
+                        tr += `<td><strong>${row['Target_y']}</strong></td></tr>`;
+                        prepBodyHtml += tr;
+                    });
+                    document.querySelector('#preprocessedDataTable tbody').innerHTML = prepBodyHtml;
+                    document.getElementById('step3Block').style.display = 'block';
+                    await delay(600);
+                }
+
+                // Render STEP 4: Metrics Comparison
+                if (data.komparasi_model && data.komparasi_model.SVR_GridSearch) {
+                    const gs = data.komparasi_model.SVR_GridSearch;
+                    const gwo = data.komparasi_model.SVR_GWO;
+                    fillMetrics(gs, gwo);
+
+                    document.getElementById('step4Block').style.display = 'block';
+                    await delay(600);
+
+                    // Show Step 5 (prediksi)
+                    document.getElementById('step5Block').style.display = 'block';
+                    document.getElementById('step4Block').scrollIntoView({behavior: "smooth", block: "start"});
+                }
+
+            } catch (error) {
+                showAlert(alertBox, 'Koneksi ke API terputus.', 'danger');
+                console.error(error);
+            } finally {
+                btn.disabled = false;
+                loader.style.display = 'none';
+                txt.innerText = '⚡ Lanjutkan dengan Model Sebelumnya';
+            }
+        }
+
+        // ==========================================
+        // 2. PREDICTION TIME SERIES 
+        // ==========================================
+        async function runPrediction() {
+            const startStr = document.getElementById('startDate').value;
+            const endStr = document.getElementById('endDate').value;
+            const holidaysStr = document.getElementById('holidays').value;
+            
+            const alertBox = document.getElementById('alertPredict');
+            const summaryBox = document.getElementById('summaryBox');
+            const chartContainer = document.getElementById('chartContainer');
+            const recommendationBox = document.getElementById('recommendationBox');
+            const btn = document.getElementById('btnPredict');
+            const loader = document.getElementById('loaderPredict');
+            const txt = document.getElementById('txtPredict');
+
+            if (!startStr || !endStr) {
+                showAlert(alertBox, 'Tanggal mulai dan akhir harus diisi', 'danger');
+                return;
+            }
+
+            let holidaysArray = holidaysStr.trim() !== '' ? holidaysStr.split(',').map(h => h.trim()) : [];
+
+            const payload = { tanggal_mulai: startStr, tanggal_akhir: endStr, daftar_libur_nasional: holidaysArray };
+
+            // Loading UI
+            btn.disabled = true;
+            loader.style.display = 'inline-block';
+            txt.innerText = 'Menelusuri Histori & Meramal...';
+            alertBox.style.display = 'none';
+            summaryBox.style.display = 'none';
+            chartContainer.style.display = 'none';
+            recommendationBox.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/predict`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('totalDays').innerText = data.total_hari_prediksi;
+                    document.getElementById('totalRevenue').innerText = formatRupiah(data.estimasi_total_pendapatan);
+                    summaryBox.style.display = 'block';
+
+                    const labels = data.detail_harian.map(d => new Date(d.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) );
+                    const revenues = data.detail_harian.map(d => d.pendapatan);
+
+                    generateRecommendation(data.estimasi_total_pendapatan, data.total_hari_prediksi, revenues);
+                    renderChart(labels, revenues);
+                    chartContainer.style.display = 'block';
+                    
+                } else {
+                    showAlert(alertBox, `Error: ${data.detail}`, 'danger');
+                }
+            } catch (error) {
+                showAlert(alertBox, `Gagal memanggil API Prediksi.`, 'danger');
+            } finally {
+                btn.disabled = false;
+                loader.style.display = 'none';
+                txt.innerText = 'Lakukan Prediksi';
+            }
+        }
+
+        function showAlert(element, message, type) {
+            element.innerText = message;
+            element.className = `alert alert-${type}`;
+            element.style.display = 'block';
+        }
+
+        function renderChart(labels, dataVal) {
+            const ctx = document.getElementById('predictionChart').getContext('2d');
+            if (revenueChart) revenueChart.destroy();
+            
+            const maxVal = Math.max(...dataVal);
+            const pointColors = dataVal.map(val => val === maxVal ? '#ef4444' : '#3b82f6');
+            const pointRadiuses = dataVal.map(val => val === maxVal ? 6 : 4);
+
+            revenueChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Prediksi SVR+GWO (Rupiah)',
+                        data: dataVal,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true,
+                        pointBackgroundColor: pointColors,
+                        pointRadius: pointRadiuses,
+                        pointHoverRadius: 7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return formatRupiah(context.raw); } } } },
+                    scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return 'Rp ' + (value/1000000).toFixed(1) + ' Jt'; } } } }
+                }
+            });
+        }
+
+        function generateRecommendation(totalRevenue, totalDays, revenues) {
+            const recBox = document.getElementById('recommendationBox');
+            const recText = document.getElementById('recText');
+            
+            const rataHarian = totalRevenue / totalDays;
+            const minRev = Math.min(...revenues);
+            const maxRev = Math.max(...revenues);
+            const maxIndex = revenues.indexOf(maxRev);
+            const minIndex = revenues.indexOf(minRev);
+            
+            let htmlHTML = `Berdasarkan tebakan Model <strong>Support Vector Regression (GWO)</strong> selama ${totalDays} hari ke depan:<br><br>`;
+            htmlHTML += `<ul>`;
+            htmlHTML += `<li><strong>Estimasi Rata-rata Harian:</strong> ${formatRupiah(rataHarian)} / hari.</li>`;
+            htmlHTML += `<li><strong>Puncak Retribusi Tertinggi:</strong> Diprediksi terjadi pada hari ke-${maxIndex+1} (<strong>${formatRupiah(maxRev)}</strong>). <br>👉 <i>Rekomendasi:</i> Perketat pengawasan di titik sentral.</li>`;
+            htmlHTML += `<li><strong>Titik Retribusi Terendah:</strong> Diprediksi pada hari ke-${minIndex+1} (<strong>${formatRupiah(minRev)}</strong>). <br>👉 <i>Rekomendasi:</i> Ideal untuk evaluasi & rotasi operasional.</li>`;
+            htmlHTML += `</ul>`;
+            
+            recText.innerHTML = htmlHTML;
+            recBox.style.display = 'block';
+        }
+
+        // ==========================================
+        // 3. EXTRA: DEEP RETRAINING SVR GWO
+        // ==========================================
+        async function retrainModel() {
+            const btn = document.getElementById('btnRetrain');
+            const loader = document.getElementById('loaderRetrain');
+            const txt = document.getElementById('txtRetrain');
+            const gsMseEl = document.getElementById('gs-mse');
+            
+            btn.disabled = true;
+            loader.style.display = 'inline-block';
+            txt.innerText = 'Serigala Berburu Terdalam...';
+            
+            // Start Stopwatch for Retrain Phase
+            const timerId = startTimer('timerRetrain');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/retrain`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+
+                if (!response.ok) {
+                    alert('Error koneksi streaming AI');
+                    throw new Error('Network crash');
+                }
+                
+                // Membaca Streaming dari Server-Sent Events (SSE) manual
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let done = false;
+                let textBuffer = '';
+
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    done = readerDone;
+                    if (value) {
+                        textBuffer += decoder.decode(value, { stream: true });
+                        const lines = textBuffer.split('\n');
+                        
+                        // Sisakan fragment teks yang belum membentuk garis utuh '\n'
+                        textBuffer = lines.pop(); 
+
+                        for (let line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const dataStr = line.replace('data: ', '');
+                                if(dataStr) {
+                                    const data = JSON.parse(dataStr);
+                                    
+                                    if(data.type === 'progress') {
+                                        // Update Notifikasi UI Secara Live
+                                        document.getElementById('progressGwo').innerHTML = `<strong>Status Pencarian GWO Live:</strong><br><span style="color: var(--primary);">${data.message}</span>`;
+                                    } else if(data.type === 'error') {
+                                        alert("Gagal: " + data.message);
+                                        break;
+                                    } else if(data.type === 'complete') {
+                                        // Selesai Pelatihan! Parse Metrik ke Kotak
+                                        const gs = data.komparasi_model.SVR_GridSearch;
+                                        const gwo = data.komparasi_model.SVR_GWO;
+                                        fillMetrics(gs, gwo);
+                                        
+                                        // Bikin efek Kedipan Hijau
+                                        const winnerElements = document.querySelectorAll('.metric-winner');
+                                        winnerElements.forEach(el => {
+                                            el.style.backgroundColor = '#d1fae5';
+                                            el.style.borderRadius = '4px';
+                                            el.style.padding = '0 4px';
+                                            setTimeout(() => {
+                                                el.style.backgroundColor = 'transparent';
+                                                el.style.padding = '0';
+                                            }, 1500);
+                                        });
+                                        
+                                        const pesanStatus = data.komparasi_model.Status_Retrain || "Serigala selesai mencari!";
+                                        alert("Pencarian Selesai: " + pesanStatus);
+                                        document.getElementById('progressGwo').innerHTML = `<i>Serigala telah beristirahat. Siap untuk ronde berikutnya!</i>`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            } catch (error) {
+                alert(`Gagal koneksi ke API server saat Retrain.`);
+            } finally {
+                clearInterval(timerId); // Stop running time
+                btn.disabled = false;
+                loader.style.display = 'none';
+                txt.innerText = '🔄 Latih Ulang SVR (Gacha Error Terkecil)';
+            }
+        }
+    </script>
+</body>
+</html>

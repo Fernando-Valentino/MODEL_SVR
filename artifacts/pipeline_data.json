@@ -1,0 +1,121 @@
+{
+    "raw_data": [
+        {
+            "Tanggal": "2022-01-02",
+            "Tahun": 2022,
+            "Bulan": 1,
+            "Tanggal_Kalender": 2,
+            "Hari_dalam_Minggu": "Minggu",
+            "Libur_Nasional": "Libur",
+            "Weekend": "Akhir Pekan",
+            "Total_Pendapatan": 2699000
+        },
+        {
+            "Tanggal": "2022-01-03",
+            "Tahun": 2022,
+            "Bulan": 1,
+            "Tanggal_Kalender": 3,
+            "Hari_dalam_Minggu": "Senin",
+            "Libur_Nasional": "Tidak Libur",
+            "Weekend": "Hari Kerja",
+            "Total_Pendapatan": 6618500
+        },
+        {
+            "Tanggal": "2022-01-04",
+            "Tahun": 2022,
+            "Bulan": 1,
+            "Tanggal_Kalender": 4,
+            "Hari_dalam_Minggu": "Selasa",
+            "Libur_Nasional": "Tidak Libur",
+            "Weekend": "Hari Kerja",
+            "Total_Pendapatan": 6625500
+        },
+        {
+            "Tanggal": "2022-01-05",
+            "Tahun": 2022,
+            "Bulan": 1,
+            "Tanggal_Kalender": 5,
+            "Hari_dalam_Minggu": "Rabu",
+            "Libur_Nasional": "Tidak Libur",
+            "Weekend": "Hari Kerja",
+            "Total_Pendapatan": 6451000
+        },
+        {
+            "Tanggal": "2022-01-06",
+            "Tahun": 2022,
+            "Bulan": 1,
+            "Tanggal_Kalender": 6,
+            "Hari_dalam_Minggu": "Kamis",
+            "Libur_Nasional": "Tidak Libur",
+            "Weekend": "Hari Kerja",
+            "Total_Pendapatan": 6649000
+        }
+    ],
+    "preprocessed_data": [
+        {
+            "Fitur_X1": 0.0,
+            "Fitur_X2": 0.0,
+            "Fitur_X3": 0.2667,
+            "Fitur_X4": 1.0,
+            "Fitur_X5": 1.0,
+            "Fitur_X6": 1.0,
+            "Fitur_X7": 0.6113,
+            "Fitur_X8": 0.1406,
+            "Target_y": 0.7437
+        },
+        {
+            "Fitur_X1": 0.0,
+            "Fitur_X2": 0.0,
+            "Fitur_X3": 0.3,
+            "Fitur_X4": 0.0,
+            "Fitur_X5": 0.0,
+            "Fitur_X6": 0.0,
+            "Fitur_X7": 0.7437,
+            "Fitur_X8": 0.3448,
+            "Target_y": 0.3471
+        },
+        {
+            "Fitur_X1": 0.0,
+            "Fitur_X2": 0.0,
+            "Fitur_X3": 0.3333,
+            "Fitur_X4": 0.1667,
+            "Fitur_X5": 0.0,
+            "Fitur_X6": 0.0,
+            "Fitur_X7": 0.3471,
+            "Fitur_X8": 0.3451,
+            "Target_y": 0.3562
+        },
+        {
+            "Fitur_X1": 0.0,
+            "Fitur_X2": 0.0,
+            "Fitur_X3": 0.3667,
+            "Fitur_X4": 0.3333,
+            "Fitur_X5": 0.0,
+            "Fitur_X6": 0.0,
+            "Fitur_X7": 0.3562,
+            "Fitur_X8": 0.3361,
+            "Target_y": 0.3546
+        },
+        {
+            "Fitur_X1": 0.0,
+            "Fitur_X2": 0.0,
+            "Fitur_X3": 0.4,
+            "Fitur_X4": 0.5,
+            "Fitur_X5": 0.0,
+            "Fitur_X6": 0.0,
+            "Fitur_X7": 0.3546,
+            "Fitur_X8": 0.3464,
+            "Target_y": 0.3591
+        }
+    ],
+    "fitur_list": [
+        "Tahun",
+        "Bulan",
+        "Tanggal_Kalender",
+        "Hari_dalam_Minggu",
+        "Libur_Nasional",
+        "Weekend",
+        "Lag_1",
+        "Lag_7"
+    ]
+}

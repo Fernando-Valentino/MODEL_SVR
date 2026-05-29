@@ -303,20 +303,24 @@
             
             <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <button class="btn btn-primary" id="btnUpload" onclick="uploadDataset()" style="display: inline-flex; align-items: center;">
-                    <span id="txtUpload">Mulai Pemrosesan AI</span>
+                    <span id="txtUpload">Mulai Pemrosesan AI (Upload CSV Baru)</span>
                     <div class="loader" id="loaderUpload"></div>
+                </button>
+                <button class="btn btn-primary" id="btnTrainExisting" onclick="trainExistingDataset()" style="display: inline-flex; align-items: center; background-color: #6366f1;">
+                    <span id="txtTrainExisting">🔄 Latih Model Baru (Gunakan Data Server)</span>
+                    <div class="loader" id="loaderTrainExisting" style="display: none; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: var(--white); animation: spin 1s ease-in-out infinite; margin-left: 0.5rem;"></div>
                 </button>
                 <span id="timerUpload" style="font-weight: 700; color: var(--danger); font-size: 1.1rem; display: none;">⏱️ 00:00</span>
             </div>
 
             <div style="display: flex; align-items: center; margin: 1.25rem 0; gap: 10px;">
                 <hr style="flex: 1; border-color: var(--border);">
-                <span style="color: var(--gray); font-size: 0.85rem; white-space: nowrap;">ATAU (Jika Sudah Pernah Training)</span>
+                <span style="color: var(--gray); font-size: 0.85rem; white-space: nowrap;">ATAU (Gunakan Hasil Model Sebelumnya)</span>
                 <hr style="flex: 1; border-color: var(--border);">
             </div>
 
             <button class="btn btn-success" id="btnLoadExisting" onclick="loadExistingModel()" style="display: inline-flex; align-items: center;">
-                <span id="txtLoadExisting">⚡ Lanjutkan dengan Model Sebelumnya</span>
+                <span id="txtLoadExisting">⚡ Lanjutkan dengan Model Sebelumnya (Tanpa Retraining)</span>
                 <div class="loader" id="loaderLoadExisting"></div>
             </button>
             <p style="font-size: 0.8rem; color: var(--gray); margin-top: 0.5rem;">
@@ -385,7 +389,7 @@
                         <div class="metric-item"><span>MAE:</span> <span class="metric-value" id="gs-mae">-</span></div>
                         <div class="metric-item" style="font-size:0.8rem; color:var(--gray); padding-left: 0.5rem;"><span>MAE (%):</span> <span id="gs-mae-pct">-</span></div>
                         <div class="metric-item"><span>MAPE:</span> <span class="metric-value" id="gs-mape">-</span></div>
-                        <div class="metric-item"><span>Akurasi (R²):</span> <span class="metric-value" id="gs-akurasi" style="color: var(--primary); font-weight: bold;">-</span></div>
+                        <div class="metric-item"><span>Akurasi (100 - MAPE):</span> <span class="metric-value" id="gs-akurasi" style="color: var(--primary); font-weight: bold;">-</span></div>
                         <div class="metric-item"><span>R² Score:</span> <span class="metric-value" id="gs-r2">-</span></div>
                     </div>
                     <div class="metric-box">
@@ -397,7 +401,7 @@
                         <div class="metric-item"><span>MAE:</span> <span class="metric-value metric-winner" id="gwo-mae">-</span></div>
                         <div class="metric-item" style="font-size:0.8rem; color:var(--gray); padding-left: 0.5rem;"><span>MAE (%):</span> <span id="gwo-mae-pct">-</span></div>
                         <div class="metric-item"><span>MAPE:</span> <span class="metric-value metric-winner" id="gwo-mape">-</span></div>
-                        <div class="metric-item"><span>Akurasi (R²):</span> <span class="metric-value metric-winner" id="gwo-akurasi" style="color: var(--success); font-weight: bold;">-</span></div>
+                        <div class="metric-item"><span>Akurasi (100 - MAPE):</span> <span class="metric-value metric-winner" id="gwo-akurasi" style="color: var(--success); font-weight: bold;">-</span></div>
                         <div class="metric-item"><span>R² Score:</span> <span class="metric-value metric-winner" id="gwo-r2">-</span></div>
                     </div>
                 </div>
@@ -435,10 +439,23 @@
                         <input type="date" id="endDate" class="form-control">
                     </div>
                 </div>
-                
-                <div class="form-group">
-                    <label for="holidays">Tambahan Tanggal Libur/Cuti Bersama Ekstra (Opsional)</label>
-                    <input type="text" id="holidays" class="form-control" placeholder="Kalender Merah otomatis dideteksi AI. Isi tanggal ini bila ada Cuti (Misal: 2025-05-01)">
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 0;">
+                    <div class="form-group">
+                        <label for="rayonSelect">🏙️ Filter Rayon (Opsional)</label>
+                        <select id="rayonSelect" class="form-control" style="cursor: pointer;">
+                            <option value="0">🌐 Semua Rayon (Total)</option>
+                            <option value="1">📍 Rayon 1 (80 Jukir)</option>
+                            <option value="2">📍 Rayon 2 (82 Jukir)</option>
+                            <option value="3">📍 Rayon 3 (66 Jukir)</option>
+                            <option value="4">📍 Rayon 4 (122 Jukir)</option>
+                            <option value="5">📍 Rayon 5 (70 Jukir)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="holidays">📅 Libur/Cuti Bersama Ekstra (Opsional)</label>
+                        <input type="text" id="holidays" class="form-control" placeholder="Cth: 2025-05-01, 2025-12-24">
+                    </div>
                 </div>
 
                 <button class="btn btn-success" id="btnPredict" onclick="runPrediction()">
@@ -449,7 +466,7 @@
                 <div id="alertPredict" class="alert"></div>
 
                 <div class="summary-box" id="summaryBox">
-                    <h3>Estimasi Total Pendapatan (<span id="totalDays">0</span> Hari)</h3>
+                    <h3>Estimasi Total Pendapatan (<span id="totalDays">0</span> Hari) — <span id="rayonLabel" style="color: var(--primary);">Semua Rayon</span></h3>
                     <p class="amount" id="totalRevenue">Rp 0</p>
                 </div>
 
@@ -473,6 +490,29 @@
 
         const formatRupiah = (number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number);
 
+        // Auto populate date inputs based on max_date in dataset
+        function autoPopulateDates(maxDateStr) {
+            if (!maxDateStr) return;
+            const maxDate = new Date(maxDateStr);
+            let t1 = new Date(maxDate); t1.setDate(t1.getDate() + 1);
+            let t2 = new Date(maxDate); t2.setDate(t2.getDate() + 7);
+            
+            const formatDate = (date) => {
+                let d = new Date(date),
+                    month = '' + (d.getMonth() + 1),
+                    day = '' + d.getDate(),
+                    year = d.getFullYear();
+
+                if (month.length < 2) month = '0' + month;
+                if (day.length < 2) day = '0' + day;
+
+                return [year, month, day].join('-');
+            };
+            
+            document.getElementById('startDate').value = formatDate(t1);
+            document.getElementById('endDate').value = formatDate(t2);
+        }
+
         // Helper terpusat: isi semua field metrik ke tabel UI
         function fillMetrics(gs, gwo) {
             document.getElementById('gs-mse').innerText = gs.MSE.toLocaleString('id-ID');
@@ -482,9 +522,9 @@
             document.getElementById('gs-mae').innerText = gs.MAE.toLocaleString('id-ID');
             document.getElementById('gs-mae-pct').innerText = gs.MAE_pct || '-';
             document.getElementById('gs-mape').innerText = gs.MAPE;
-            // Akurasi selalu dihitung dari R2 (bisa handle format lama maupun baru)
-            document.getElementById('gs-akurasi').innerText = (gs.R2 * 100).toFixed(2) + ' %';
-            document.getElementById('gs-r2').innerText = gs.R2.toFixed(4);
+            // Akurasi diambil langsung dari backend (100 - MAPE)
+            document.getElementById('gs-akurasi').innerText = gs.Akurasi || ((100 - parseFloat(gs.MAPE)).toFixed(2) + ' %');
+            document.getElementById('gs-r2').innerText = gs.R2.toFixed(6);
 
             document.getElementById('gwo-mse').innerText = gwo.MSE.toLocaleString('id-ID');
             document.getElementById('gwo-mse-pct').innerText = gwo.MSE_pct || '-';
@@ -493,9 +533,9 @@
             document.getElementById('gwo-mae').innerText = gwo.MAE.toLocaleString('id-ID');
             document.getElementById('gwo-mae-pct').innerText = gwo.MAE_pct || '-';
             document.getElementById('gwo-mape').innerText = gwo.MAPE;
-            // Akurasi selalu dihitung dari R2 (bisa handle format lama maupun baru)
-            document.getElementById('gwo-akurasi').innerText = (gwo.R2 * 100).toFixed(2) + ' %';
-            document.getElementById('gwo-r2').innerText = gwo.R2.toFixed(4);
+            // Akurasi diambil langsung dari backend (100 - MAPE)
+            document.getElementById('gwo-akurasi').innerText = gwo.Akurasi || ((100 - parseFloat(gwo.MAPE)).toFixed(2) + ' %');
+            document.getElementById('gwo-r2').innerText = gwo.R2.toFixed(6);
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -650,6 +690,10 @@
                                             const gwo = data.komparasi_model.SVR_GWO;
                                             fillMetrics(gs, gwo);
 
+                                            if (data.pipeline_data && data.pipeline_data.max_date) {
+                                                autoPopulateDates(data.pipeline_data.max_date);
+                                            }
+
                                             // Show Step 4
                                             document.getElementById('step4Block').style.display = 'block';
                                             document.getElementById('step4Block').classList.add('step-hidden');
@@ -677,6 +721,159 @@
                 btn.disabled = false;
                 loader.style.display = 'none';
                 txt.innerText = 'Unggah Dataset Baru';
+            }
+        }
+
+        // ==========================================
+        // 1b. TRAIN EXISTING DATASET (GUNA DATA SERVER)
+        // ==========================================
+        async function trainExistingDataset() {
+            const alertBox = document.getElementById('alertUpload');
+            const btn = document.getElementById('btnTrainExisting');
+            const loader = document.getElementById('loaderTrainExisting');
+            const txt = document.getElementById('txtTrainExisting');
+
+            // Reset UI states
+            document.getElementById('step2Block').style.display = 'none';
+            document.getElementById('step3Block').style.display = 'none';
+            document.getElementById('step4Block').style.display = 'none';
+            document.getElementById('step5Block').style.display = 'none';
+
+            btn.disabled = true;
+            loader.style.display = 'inline-block';
+            txt.innerText = 'Menganalisis & Melatih Model...';
+            alertBox.style.display = 'none';
+            
+            // Start Stopwatch for Train Phase
+            const timerId = startTimer('timerUpload');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/train-existing`, {
+                    method: 'POST',
+                    headers: { 'X-API-Key': API_KEY }
+                });
+
+                if (!response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    showAlert(alertBox, data.detail || 'Error server FastAPI. Data gagal diproses.', 'danger');
+                    throw new Error('Network crash');
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let done = false;
+                let textBuffer = '';
+
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    done = readerDone;
+                    if (value) {
+                        textBuffer += decoder.decode(value, { stream: true });
+                        const lines = textBuffer.split('\n');
+                        textBuffer = lines.pop(); 
+
+                        for (let line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const dataStr = line.replace('data: ', '');
+                                if(dataStr) {
+                                    const data = JSON.parse(dataStr);
+                                    
+                                    if(data.type === 'info') {
+                                        txt.innerHTML = `<strong><span style="color:var(--primary)">Processing:</span></strong> ${data.message}`;
+                                    } else if(data.type === 'progress') {
+                                        txt.innerHTML = `<strong><span style="color:var(--success)">SVR GWO Live:</span></strong> ${data.message}`;
+                                    } else if(data.type === 'error') {
+                                        showAlert(alertBox, `Gagal: ${data.message}`, 'danger');
+                                        break;
+                                    } else if(data.type === 'complete') {
+                                        
+                                        showAlert(alertBox, "Proses Pipeline selesai!", 'success');
+                                        
+                                        // Render STEP 2: Raw Data Table
+                                        if (data.pipeline_data && data.pipeline_data.raw_data && data.pipeline_data.raw_data.length > 0) {
+                                            const rawData = data.pipeline_data.raw_data;
+                                            const columns = Object.keys(rawData[0]);
+                                            
+                                            let headHtml = '<tr>' + columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
+                                            document.querySelector('#rawDataTable thead').innerHTML = headHtml;
+                                            
+                                            let bodyHtml = '';
+                                            rawData.forEach(row => {
+                                                bodyHtml += '<tr>' + columns.map(c => `<td>${row[c]}</td>`).join('') + '</tr>';
+                                            });
+                                            document.querySelector('#rawDataTable tbody').innerHTML = bodyHtml;
+                                            
+                                            // Show Step 2
+                                            document.getElementById('step2Block').style.display = 'block';
+                                            document.getElementById('step2Block').classList.add('step-hidden'); // Re-trigger animation
+                                            await delay(800);
+                                        }
+                                        
+                                        // Render STEP 3: Preprocessed Data Table
+                                        if (data.pipeline_data && data.pipeline_data.preprocessed_data && data.pipeline_data.preprocessed_data.length > 0) {
+                                            const prepData = data.pipeline_data.preprocessed_data;
+                                            const features = data.pipeline_data.fitur_list || [];
+                                            
+                                            // Header prep
+                                            let prepHeadHtml = features.map(f => `<th>${f}</th>`).join('');
+                                            prepHeadHtml += `<th><span style="color:var(--primary)">Target (Scaled)</span></th>`;
+                                            document.getElementById('prepTableHead').innerHTML = prepHeadHtml;
+                                            
+                                            // Body prep
+                                            let prepBodyHtml = '';
+                                            prepData.forEach((row, index) => {
+                                                let tr = '<tr>';
+                                                features.forEach((f, idx) => {
+                                                    tr += `<td>${row['Fitur_X'+(idx+1)]}</td>`;
+                                                });
+                                                tr += `<td><strong>${row['Target_y']}</strong></td></tr>`;
+                                                prepBodyHtml += tr;
+                                            });
+                                            document.querySelector('#preprocessedDataTable tbody').innerHTML = prepBodyHtml;
+                                            
+                                            // Show Step 3
+                                            document.getElementById('step3Block').style.display = 'block';
+                                            document.getElementById('step3Block').classList.add('step-hidden');
+                                            await delay(800);
+                                        }
+
+                                        // Render STEP 4: Metrics Comparison
+                                        if (data.komparasi_model && data.komparasi_model.SVR_GridSearch) {
+                                            const gs = data.komparasi_model.SVR_GridSearch;
+                                            const gwo = data.komparasi_model.SVR_GWO;
+                                            fillMetrics(gs, gwo);
+
+                                            if (data.pipeline_data && data.pipeline_data.max_date) {
+                                                autoPopulateDates(data.pipeline_data.max_date);
+                                            }
+
+                                            // Show Step 4
+                                            document.getElementById('step4Block').style.display = 'block';
+                                            document.getElementById('step4Block').classList.add('step-hidden');
+                                            await delay(1000);
+                                            
+                                            // Show Step 5
+                                            document.getElementById('step5Block').style.display = 'block';
+                                            document.getElementById('step5Block').classList.add('step-hidden');
+                                            
+                                            // Scroll nicely to Step 4
+                                            document.getElementById('step4Block').scrollIntoView({behavior: "smooth", block: "start"});
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            } catch (error) {
+                showAlert(alertBox, `Koneksi ke API terputus atau format stream rusak.`, 'danger');
+                console.error(error);
+            } finally {
+                clearInterval(timerId); // Stop running time
+                btn.disabled = false;
+                loader.style.display = 'none';
+                txt.innerText = '🔄 Latih Model Baru (Gunakan Data Server)';
             }
         }
 
@@ -756,6 +953,10 @@
                     const gwo = data.komparasi_model.SVR_GWO;
                     fillMetrics(gs, gwo);
 
+                    if (data.pipeline_data && data.pipeline_data.max_date) {
+                        autoPopulateDates(data.pipeline_data.max_date);
+                    }
+
                     document.getElementById('step4Block').style.display = 'block';
                     await delay(600);
 
@@ -781,6 +982,7 @@
             const startStr = document.getElementById('startDate').value;
             const endStr = document.getElementById('endDate').value;
             const holidaysStr = document.getElementById('holidays').value;
+            const rayonId = parseInt(document.getElementById('rayonSelect').value) || 0;
             
             const alertBox = document.getElementById('alertPredict');
             const summaryBox = document.getElementById('summaryBox');
@@ -797,7 +999,8 @@
 
             let holidaysArray = holidaysStr.trim() !== '' ? holidaysStr.split(',').map(h => h.trim()) : [];
 
-            const payload = { tanggal_mulai: startStr, tanggal_akhir: endStr, daftar_libur_nasional: holidaysArray };
+            const rayonLabel = rayonId > 0 ? `Rayon ${rayonId}` : 'Semua Rayon';
+            const payload = { tanggal_mulai: startStr, tanggal_akhir: endStr, daftar_libur_nasional: holidaysArray, rayon_id: rayonId };
 
             // Loading UI
             btn.disabled = true;
@@ -820,13 +1023,14 @@
                 if (response.ok) {
                     document.getElementById('totalDays').innerText = data.total_hari_prediksi;
                     document.getElementById('totalRevenue').innerText = formatRupiah(data.estimasi_total_pendapatan);
+                    document.getElementById('rayonLabel').innerText = rayonLabel;
                     summaryBox.style.display = 'block';
 
                     const labels = data.detail_harian.map(d => new Date(d.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) );
                     const revenues = data.detail_harian.map(d => d.pendapatan);
 
-                    generateRecommendation(data.estimasi_total_pendapatan, data.total_hari_prediksi, revenues);
-                    renderChart(labels, revenues);
+                    generateRecommendation(data.estimasi_total_pendapatan, data.total_hari_prediksi, revenues, rayonLabel);
+                    renderChart(labels, revenues, rayonLabel);
                     chartContainer.style.display = 'block';
                     
                 } else {
@@ -847,7 +1051,7 @@
             element.style.display = 'block';
         }
 
-        function renderChart(labels, dataVal) {
+        function renderChart(labels, dataVal, rayonLabel = 'Semua Rayon') {
             const ctx = document.getElementById('predictionChart').getContext('2d');
             if (revenueChart) revenueChart.destroy();
             
@@ -860,7 +1064,7 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Prediksi SVR+GWO (Rupiah)',
+                        label: `Prediksi SVR+GWO — ${rayonLabel} (Rupiah)`,
                         data: dataVal,
                         borderColor: '#3b82f6',
                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
@@ -875,13 +1079,13 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return formatRupiah(context.raw); } } } },
+                    plugins: { legend: { display: true, labels: { color: '#1f2937', font: { size: 13 } } }, tooltip: { callbacks: { label: function(context) { return formatRupiah(context.raw); } } } },
                     scales: { y: { beginAtZero: true, ticks: { callback: function(value) { return 'Rp ' + (value/1000000).toFixed(1) + ' Jt'; } } } }
                 }
             });
         }
 
-        function generateRecommendation(totalRevenue, totalDays, revenues) {
+        function generateRecommendation(totalRevenue, totalDays, revenues, rayonLabel = 'Semua Rayon') {
             const recBox = document.getElementById('recommendationBox');
             const recText = document.getElementById('recText');
             
@@ -891,7 +1095,7 @@
             const maxIndex = revenues.indexOf(maxRev);
             const minIndex = revenues.indexOf(minRev);
             
-            let htmlHTML = `Berdasarkan tebakan Model <strong>Support Vector Regression (GWO)</strong> selama ${totalDays} hari ke depan:<br><br>`;
+            let htmlHTML = `Berdasarkan tebakan Model <strong>Support Vector Regression (GWO)</strong> untuk <strong>${rayonLabel}</strong> selama ${totalDays} hari ke depan:<br><br>`;
             htmlHTML += `<ul>`;
             htmlHTML += `<li><strong>Estimasi Rata-rata Harian:</strong> ${formatRupiah(rataHarian)} / hari.</li>`;
             htmlHTML += `<li><strong>Puncak Retribusi Tertinggi:</strong> Diprediksi terjadi pada hari ke-${maxIndex+1} (<strong>${formatRupiah(maxRev)}</strong>). <br>👉 <i>Rekomendasi:</i> Perketat pengawasan di titik sentral.</li>`;

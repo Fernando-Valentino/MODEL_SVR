@@ -6,6 +6,8 @@ import datetime
 import holidays as pyholidays
 from app.core.config import get_settings
 from app.core.logger import logger
+from app.core.constants import LIBUR_NASIONAL_ID, JUKIR_MAP
+from app.utils.preprocessing import extract_features_for_day
 
 class MLService:
     def __init__(self):
@@ -22,7 +24,6 @@ class MLService:
             scaler_X_path = os.path.join(self.artifacts_dir, 'scaler_X.pkl')
             scaler_y_path = os.path.join(self.artifacts_dir, 'scaler_y.pkl')
 
-            # Periksa apakah file tersedia (agar tak crash saat awal setup tanpa model)
             if os.path.exists(model_path):
                 self.model = joblib.load(model_path)
                 self.scaler_X = joblib.load(scaler_X_path)
@@ -33,7 +34,7 @@ class MLService:
         except Exception as e:
             logger.error(f"Error loading artifacts: {str(e)}")
 
-    def autoregressive_predict(self, start_date_str: str, end_date_str: str, holidays: list) -> list:
+    def autoregressive_predict(self, start_date_str: str, end_date_str: str, holidays: list, rayon_id: int = 0) -> list:
         if self.model is None or self.scaler_X is None or self.scaler_y is None:
             raise ValueError("Model artifacts belum di-load. Silakan upload dataset dan train dulu.")
 
@@ -43,90 +44,95 @@ class MLService:
         except ValueError:
             raise ValueError("Format tanggal salah! Gunakan format YYYY-MM-DD.")
 
-        # Validasi logis tanggal
         if end_date < start_date:
             raise ValueError("Tanggal akhir tidak boleh mundur dari tanggal awal!")
 
-        # 1. Load histori CSV asli untuk awalan pemicu (Trigger Lag)
-        file_path = 'DATA_PENDAPATAN_PARKIR_PER_HARI_2022-2025.csv'
+        # 1. Load histori CSV asli untuk awalan pemicu
+        file_path = 'DATA_PENDAPATAN_PARKIR_PER_HARI_2023-2025.csv'
         if not os.path.exists(file_path):
             raise ValueError("Dataset histori (CSV) tidak ditemukan di server.")
         
         df_history = pd.read_csv(file_path, parse_dates=['Tanggal'])
         
-        # 2. Kamus Memori (RAM Lookup): Menyimpan kombinasi Rekam Jejak CSV + Rekam Jejak Prediksi Baru
-        revenue_lookup = dict(zip(df_history['Tanggal'].dt.strftime('%Y-%m-%d'), df_history['Total_Pendapatan']))
-
-        results = []
+        # ── Preprocess history exactly as during training ──
+        libur_nasional_id = pd.to_datetime(LIBUR_NASIONAL_ID)
+        df_history['Libur_Nasional'] = df_history['Tanggal'].dt.normalize().isin(libur_nasional_id).astype(int)
+        
+        mask_hapus = (df_history['Total_Pendapatan'] == 0) & (df_history['Libur_Nasional'] != 1)
+        df_history = df_history[~mask_hapus].copy().reset_index(drop=True)
+        
+        median_libur = df_history[(df_history['Libur_Nasional'] == 1) & (df_history['Total_Pendapatan'] > 0)]['Total_Pendapatan'].median()
+        if pd.isna(median_libur): median_libur = 1000
+        df_history.loc[(df_history['Libur_Nasional'] == 1) & (df_history['Total_Pendapatan'] == 0), 'Total_Pendapatan'] = median_libur
         
         last_known_date = df_history['Tanggal'].max()
         
-        # Jika user meminta meramal dari hari esok saja
+        # 2. Setup running state
+        df_predict_state = df_history[['Tanggal', 'Rayon', 'Total_Pendapatan', 'Libur_Nasional', 'Weekend', 'Jumlah Jukir']].copy()
+        
+        results = []
+        
+        # Determine current date simulation starting point
         if start_date <= last_known_date + datetime.timedelta(days=1):
             current_date = start_date
         else:
-            # Jika user meminta tahun 2026, padahal data cuma sampe 2025.
-            # Sistem secara pintar harus "Melatih/Menaruh Memori Tebakan" per-hari sejak 2025 s/d 2026.
             current_date = last_known_date + datetime.timedelta(days=1)
             logger.info(f"Otomatis me-rolling data kosong dari {current_date.strftime('%Y-%m-%d')} untuk mencapai target {start_date_str}")
-
-        logger.info(f"Mengeksekusi prediksi Autoregressive rentang: {start_date_str} s/d {end_date_str}")
+            
+        id_holidays = pyholidays.Indonesia()
         
-        # 3. Looping dari Hari Pertama s/d Hari Terakhir (Target Akhir)
+        # 3. Autoregressive loop
         while current_date <= end_date:
             curr_str = current_date.strftime('%Y-%m-%d')
             
-            # Cari lag 1 dan lag 7 secara mundur dari RAM (Bisa dari masa lalu asli, atau tebakan buatan sistem 2 hari lalu)
-            lag_1_date = (current_date - datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-            lag_7_date = (current_date - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
-
-            lag_1 = revenue_lookup.get(lag_1_date)
-            lag_7 = revenue_lookup.get(lag_7_date)
-
-            if lag_1 is None:
-                lag_1 = list(revenue_lookup.values())[-1] # Fallback Anti-Error
-            if lag_7 is None:
-                 lag_7 = list(revenue_lookup.values())[-7] if len(revenue_lookup) >= 7 else lag_1 # Fallback Anti-Error
-
-            # Menyusun Fitur SVR untuk hari ini
-            tahun = current_date.year
-            bulan = current_date.month
-            tgl = current_date.day
-            hari_index = current_date.weekday() # 0:Senin, 6:Minggu
-            hari = hari_index + 1 # Sesuaikan Label Encoding: Senin=1, Minggu=7
+            # Predict for each rayon
+            pred_asli = []
+            for r in range(1, 6):
+                # Call extract_features_for_day from preprocessing.py, passing in-memory state override
+                X_today = extract_features_for_day(curr_str, r, holidays, df_history_override=df_predict_state)
+                X_scaled = self.scaler_X.transform(X_today)
+                pred_scaled = self.model.predict(X_scaled).reshape(-1, 1)
+                pred_log = self.scaler_y.inverse_transform(pred_scaled).flatten()
+                pred_val = np.expm1(pred_log)[0]
+                pred_asli.append(pred_val)
+                
+            # Fill the predicted values back to the prediction state for today
+            is_libur_nasional = (curr_str in LIBUR_NASIONAL_ID) or (current_date in id_holidays) or (curr_str in holidays)
+            libur = 1 if is_libur_nasional else 0
+            weekend = 1 if current_date.weekday() >= 5 else 0
             
-            # Deteksi Libur Nasional Otomatis (Indonesia) + Libur Manual (Opsional)
-            id_holidays = pyholidays.Indonesia()
-            is_libur_nasional = current_date in id_holidays
-            is_libur_manual = curr_str in holidays
-            
-            libur = 1 if (is_libur_nasional or is_libur_manual) else 0
-            
-            # Mendeteksi fitur yang diharapkan oleh Model (7 tanpa Weekend, atau 8 pake Weekend)
-            if hasattr(self.scaler_X, 'n_features_in_') and self.scaler_X.n_features_in_ == 8:
-                weekend = 1 if hari >= 6 else 0
-                fitur = np.array([tahun, bulan, tgl, hari, libur, weekend, lag_1, lag_7]).reshape(1, -1)
-            else:
-                fitur = np.array([tahun, bulan, tgl, hari, libur, lag_1, lag_7]).reshape(1, -1)
-            
-            # Predict (Normalisasi dulu -> Model GWO -> Kembalikan ke Rupiah)
-            X_scaled = self.scaler_X.transform(fitur)
-            pred_scaled = self.model.predict(X_scaled).reshape(-1, 1)
-            pred_asli = self.scaler_y.inverse_transform(pred_scaled).flatten()[0]
-            
-            # SIMPAN hasil tebakan ke RAM untuk jembatan besoknya
-            revenue_lookup[curr_str] = float(pred_asli)
-            
-            # Hanya catat hasil output jika tanggalnya sudah menyentuh target user (start_date)
-            if current_date >= start_date:
-                results.append({
-                    "tanggal": curr_str,
-                    "pendapatan": float(pred_asli)
+            new_rows = []
+            for idx, r in enumerate(range(1, 6)):
+                new_rows.append({
+                    'Tanggal': current_date,
+                    'Rayon': r,
+                    'Total_Pendapatan': pred_asli[idx],
+                    'Libur_Nasional': libur,
+                    'Weekend': weekend,
+                    'Jumlah Jukir': JUKIR_MAP[r]
                 })
+            df_new = pd.DataFrame(new_rows)
+            df_predict_state = pd.concat([df_predict_state, df_new], ignore_index=True)
             
+            # Add to results if within user range
+            if current_date >= start_date:
+                if rayon_id > 0:
+                    # Return only the specific rayon's prediction
+                    selected_revenue = float(pred_asli[rayon_id - 1])
+                    results.append({
+                        "tanggal": curr_str,
+                        "pendapatan": selected_revenue
+                    })
+                else:
+                    # Return sum of all rayons
+                    total_daily_revenue = float(np.sum(pred_asli))
+                    results.append({
+                        "tanggal": curr_str,
+                        "pendapatan": total_daily_revenue
+                    })
+                
             current_date += datetime.timedelta(days=1)
             
         return results
 
-# Instansiasi Singleton MLService
 ml_service = MLService()

@@ -1,25 +1,25 @@
 {
     "SVR_GridSearch": {
-        "MSE": 3845977510929.728,
-        "MSE_pct": "6.4425 %",
-        "RMSE": 1961116.3940291072,
-        "RMSE_pct": "25.38 %",
-        "MAE": 1362881.0271908853,
-        "MAE_pct": "17.64 %",
-        "MAPE": "33.55 %",
-        "Akurasi": "47.12 %",
-        "R2": 0.4712001390727457
+        "MSE": 41573578016.0,
+        "MSE_pct": "1.7071 %",
+        "RMSE": 203896.0,
+        "RMSE_pct": "13.07 %",
+        "MAE": 135957.0,
+        "MAE_pct": "8.71 %",
+        "MAPE": "13.0788 %",
+        "Akurasi": "86.92 %",
+        "R2": 0.902091
     },
     "SVR_GWO": {
-        "MSE": 3430728538226.464,
-        "MSE_pct": "5.7469 %",
-        "RMSE": 1852222.594135614,
-        "RMSE_pct": "23.97 %",
-        "MAE": 1298590.1276980264,
-        "MAE_pct": "16.81 %",
-        "MAPE": "31.38 %",
-        "Akurasi": "52.83 %",
-        "R2": 0.5282944924306751
+        "MSE": 37639492081.0,
+        "MSE_pct": "1.5456 %",
+        "RMSE": 194009.0,
+        "RMSE_pct": "12.43 %",
+        "MAE": 130623.0,
+        "MAE_pct": "8.37 %",
+        "MAPE": "12.9644 %",
+        "Akurasi": "87.04 %",
+        "R2": 0.911356
     },
-    "Status_Retrain": "Mentok. Tidak ada serigala yang mengalahkan akurasi 68.62%."
+    "Status_Retrain": "Training selesai. Parameter GWO Terbaik: C=250.03, eps=0.005366, gamma=0.00446"
 }

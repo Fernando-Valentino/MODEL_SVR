@@ -18,7 +18,13 @@
 
 <header class="topbar">
     <div class="topbar-left">
-        <span class="system-status">● Sistem Aktif</span>
+        <div class="realtime-clock" id="realtime-clock">
+            <i class="bi bi-calendar3 me-2"></i>
+            <span class="clock-date" id="clock-date">Memuat tanggal...</span>
+            <span class="clock-divider">|</span>
+            <i class="bi bi-clock me-2"></i>
+            <span class="clock-time" id="clock-time">--:--:--</span>
+        </div>
     </div>
     
     <div class="topbar-right">

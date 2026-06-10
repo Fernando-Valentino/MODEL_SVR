@@ -14,10 +14,12 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     
     <!-- External Custom Stylesheet -->
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v={{ time() }}">
     
     <!-- Bootstrap 5.3 JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- External JavaScript -->
     <script src="{{ asset('js/app.js') }}" defer></script>
 </head>
@@ -43,5 +45,21 @@
         </div>
     </main>
 
+    <!-- SweetAlert2 Toast Messages -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            @if(session('success'))
+                showToast('success', "{{ session('success') }}");
+            @endif
+
+            @if(session('error'))
+                showToast('error', "{{ session('error') }}");
+            @endif
+            
+            @if(session('warning'))
+                showToast('warning', "{{ session('warning') }}");
+            @endif
+        });
+    </script>
 </body>
 </html>

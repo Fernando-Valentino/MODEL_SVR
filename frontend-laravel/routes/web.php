@@ -43,11 +43,13 @@ Route::prefix('operator')->middleware(['auth', 'role:operator'])->name('operator
     Route::get('/dashboard', [OperatorDashboardController::class, 'index'])->name('dashboard');
 
     // Master Data
+    Route::get('/master-data/pendapatan/template', [PendapatanController::class, 'downloadTemplate'])->name('pendapatan.template');
     Route::resource('/master-data/pendapatan', PendapatanController::class);
     Route::post('/master-data/pendapatan/import', [PendapatanController::class, 'import'])->name('pendapatan.import');
 
     Route::resource('/master-data/rayon', RayonController::class);
     Route::resource('/master-data/juru-parkir', JuruParkirController::class);
+    Route::post('/master-data/hari-libur/generate', [HariLiburController::class, 'generate'])->name('hari-libur.generate');
     Route::resource('/master-data/hari-libur', HariLiburController::class);
 
     // Modul Prediksi SVR

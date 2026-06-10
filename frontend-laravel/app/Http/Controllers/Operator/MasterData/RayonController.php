@@ -3,56 +3,114 @@
 namespace App\Http\Controllers\Operator\MasterData;
 
 use App\Http\Controllers\Controller;
+use App\Models\Rayon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class RayonController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $rayons = [
-            [
-                'no' => 1,
-                'nama_rayon' => 'Rayon I',
-                'cakupan_wilayah' => 'Kec. Kejaksan',
-                'karakteristik_area' => 'Pusat bisnis dan perkantoran',
-                'jumlah_juru_parkir' => 80
-            ],
-            [
-                'no' => 2,
-                'nama_rayon' => 'Rayon II',
-                'cakupan_wilayah' => 'Kec. Lemahwungkuk & Pekalipan',
-                'karakteristik_area' => 'Area perdagangan utama',
-                'jumlah_juru_parkir' => 82
-            ],
-            [
-                'no' => 3,
-                'nama_rayon' => 'Rayon III',
-                'cakupan_wilayah' => 'Kec. Kesambi & Pekalipan',
-                'karakteristik_area' => 'Pasar tradisional dan pusat aktivitas',
-                'jumlah_juru_parkir' => 66
-            ],
-            [
-                'no' => 4,
-                'nama_rayon' => 'Rayon IV',
-                'cakupan_wilayah' => 'Kec. Harjamukti & Kesambi',
-                'karakteristik_area' => 'Wilayah selatan dan pemukiman',
-                'jumlah_juru_parkir' => 122
-            ],
-            [
-                'no' => 5,
-                'nama_rayon' => 'Rayon V',
-                'cakupan_wilayah' => 'Kec. Lemahwungkuk',
-                'karakteristik_area' => 'Wisata/kuliner',
-                'jumlah_juru_parkir' => 70
-            ]
-        ];
+        $rayons = Rayon::when($request->filled('search'), function($query) use ($request) {
+            $search = $request->search;
+            $query->where('nama_rayon', 'like', "%{$search}%")
+                  ->orWhere('kecamatan', 'like', "%{$search}%")
+                  ->orWhere('lokasi', 'like', "%{$search}%")
+                  ->orWhere('karakteristik_area', 'like', "%{$search}%");
+        })->paginate(10)->onEachSide(1)->withQueryString();
 
         return view('operator.master-data.rayon.index', compact('rayons'));
     }
 
-    public function create() { return 'Rayon Create Form'; }
-    public function store() { return 'Rayon Store Handler'; }
-    public function show($id) { return 'Rayon Details: ' . $id; }
-    public function edit($id) { return 'Rayon Edit Form for ID: ' . $id; }
-    public function update($id) { return 'Rayon Update Handler for ID: ' . $id; }
-    public function destroy($id) { return 'Rayon Delete Handler for ID: ' . $id; }
+    public function create()
+    {
+        abort(404);
+    }
+
+    public function store(Request $request)
+    {
+        $rules = [
+            'nama_rayon' => 'required|string|max:255|unique:rayons,nama_rayon',
+            'kecamatan' => 'required|string|max:255',
+            'lokasi' => 'required|string|max:255',
+            'karakteristik_area' => 'required|string|max:255',
+            'jumlah_juru_parkir' => 'required|integer|min:0',
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        Rayon::create($request->all());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data Rayon berhasil ditambahkan.'
+        ]);
+    }
+
+    public function show($id)
+    {
+        $rayon = Rayon::findOrFail($id);
+        return response()->json($rayon);
+    }
+
+    public function edit($id)
+    {
+        $rayon = Rayon::findOrFail($id);
+        return response()->json($rayon);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $rayon = Rayon::findOrFail($id);
+
+        $rules = [
+            'nama_rayon' => 'required|string|max:255|unique:rayons,nama_rayon,' . $id,
+            'kecamatan' => 'required|string|max:255',
+            'lokasi' => 'required|string|max:255',
+            'karakteristik_area' => 'required|string|max:255',
+            'jumlah_juru_parkir' => 'required|integer|min:0',
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $rayon->update($request->all());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data Rayon berhasil diperbarui.'
+        ]);
+    }
+
+    public function destroy($id)
+    {
+        $rayon = Rayon::findOrFail($id);
+
+        if ($rayon->pendapatans()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Rayon tidak dapat dihapus karena memiliki data riwayat pendapatan. Hapus data pendapatan terlebih dahulu.'
+            ], 400);
+        }
+
+        $rayon->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data Rayon berhasil dihapus.'
+        ]);
+    }
 }

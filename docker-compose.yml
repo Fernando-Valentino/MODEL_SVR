@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # 1. Frontend Laravel Application
+  laravel_app:
+    build:
+      context: ./frontend-laravel
+      dockerfile: Dockerfile
+    container_name: laravel_app
+    restart: unless-stopped
+    ports:
+      - "8001:80"
+    volumes:
+      - ./frontend-laravel:/var/www/html
+    environment:
+      - DB_HOST=mysql_db
+      - FASTAPI_URL=http://python_api:8000
+    depends_on:
+      - mysql_db
+      - python_api
+    networks:
+      - svr_network
+
+  # 2. Backend FastAPI Python Application
+  python_api:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    container_name: python_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend-python:/app
+    networks:
+      - svr_network
+
+  # 3. MySQL Database
+  mysql_db:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: svr_parkir
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_USER: svr_user
+      MYSQL_PASSWORD: userpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - svr_network
+
+  # 4. phpMyAdmin (Database Management Interface)
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: mysql_db
+      PMA_USER: root
+      PMA_PASSWORD: rootpassword
+    depends_on:
+      - mysql_db
+    networks:
+      - svr_network
+
+networks:
+  svr_network:
+    driver: bridge
+
+volumes:
+  mysql_data:

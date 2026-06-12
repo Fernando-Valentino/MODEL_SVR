@@ -151,11 +151,83 @@ Untuk mengevaluasi kinerja model prediksi (SVR standar maupun setelah optimasi),
 ---
 
 ## 10. Output Sistem
-Sistem menghasilkan beberapa output utama yang disajikan melalui antarmuka Laravel:
-1. **Dashboard Kinerja**: Grafik garis interaktif yang membandingkan tren pendapatan aktual dengan tren prediksi di masa mendatang.
-2. **Kartu Skor Metrik (Metric Scorecard)**: Tampilan visual nilai $MAE$, $RMSE$, $MAPE$, dan $R^2$ lengkap dengan label kriteria akurasinya (misalnya: "Sangat Akurat", "Model Kuat").
-3. **Dokumen Laporan Cetak (PDF)**: Laporan berformat PDF resmi (*Laporan Prediksi Pendapatan Retribusi*) untuk Kepala UPT dan Kepala Dishub yang menyajikan data ringkasan eksekutif.
-4. **Dokumen Tabel Data (Excel)**: Berkas data mentah hasil prediksi untuk Operator UPT Parkir guna kebutuhan audit internal.
+
+Sistem menghasilkan beberapa output utama yang dapat dikelompokkan berdasarkan jenis dan alur prosesnya.
+
+---
+
+### 10.1. Output Prediksi Pendapatan (API Response)
+
+Ketika Operator menjalankan prediksi melalui endpoint `POST /api/predict`, FastAPI menghasilkan respons JSON berstruktur sebagai berikut:
+
+| Field | Tipe Data | Keterangan |
+| :--- | :--- | :--- |
+| `status` | `string` | Status eksekusi, bernilai `"Sukses"` jika berhasil |
+| `pesan` | `string` | Pesan deskriptif hasil prediksi, contoh: *"Berhasil men-generate ramalan cuan SVR-GWO untuk 30 hari (Semua Rayon)"* |
+| `total_hari_prediksi` | `integer` | Jumlah total hari yang dicakup dalam rentang prediksi |
+| `estimasi_total_pendapatan` | `float` | Akumulasi total estimasi pendapatan retribusi (dalam Rupiah) sepanjang rentang tanggal yang dipilih |
+| `detail_harian` | `array` | Daftar prediksi per hari, masing-masing berisi `tanggal` (format `YYYY-MM-DD`) dan `pendapatan` (nominal dalam Rupiah) |
+
+**Parameter Input Prediksi:**
+| Parameter | Tipe | Keterangan |
+| :--- | :--- | :--- |
+| `tanggal_mulai` | `string` | Tanggal awal periode prediksi (format `YYYY-MM-DD`) |
+| `tanggal_akhir` | `string` | Tanggal akhir periode prediksi (format `YYYY-MM-DD`) |
+| `daftar_libur_nasional` | `array<string>` | Daftar tanggal libur nasional dalam rentang tersebut |
+| `rayon_id` | `integer` | Filter per rayon (1–5), isi `0` untuk total semua rayon |
+
+---
+
+### 10.2. Output Evaluasi Performa Model (Komparasi Grid Search vs GWO)
+
+Setelah proses pelatihan model selesai, sistem menyimpan dan menampilkan metrik evaluasi komparatif dua metode optimasi. Berikut adalah hasil aktual model yang telah dilatih menggunakan data pendapatan parkir Kota Cirebon tahun 2023–2025:
+
+| Metrik | SVR + Grid Search | SVR + GWO | Satuan |
+| :--- | ---: | ---: | :--- |
+| **MSE** | 41.573.578.016 | 37.639.492.081 | Rupiah² |
+| **RMSE** | 203.896 | 194.009 | Rupiah |
+| **MAE** | 135.957 | 130.623 | Rupiah |
+| **MAPE** | 13,08% | **12,96%** | % |
+| **Akurasi** | 86,92% | **87,04%** | % |
+| **R² Score** | 0,9021 | **0,9114** | — |
+
+> **Kesimpulan Evaluasi**: Model SVR dengan optimasi **Grey Wolf Optimizer (GWO)** menghasilkan performa lebih unggul dibandingkan Grid Search pada seluruh metrik. Nilai MAPE sebesar **12,96%** masuk dalam kategori **"Baik"** berdasarkan standar klasifikasi Safira (2023), dan nilai R² sebesar **0,9114** masuk dalam kategori **"Model Kuat"** berdasarkan Hair et al. (2021).
+
+**Parameter Optimal Hasil GWO:**
+
+| Parameter SVR | Nilai Optimal |
+| :--- | :--- |
+| C *(Regularization)* | 250,03 |
+| ε *(Epsilon)* | 0,005366 |
+| γ *(Gamma)* | 0,00446 |
+
+---
+
+### 10.3. Output Tampilan Antarmuka (UI Laravel)
+
+Semua hasil prediksi dan evaluasi ditampilkan secara visual di antarmuka Laravel sesuai peran pengguna:
+
+#### a. Halaman Prediksi SVR
+- **Tabel Hasil Prediksi**: Menampilkan kolom Tanggal, Rayon, Nilai Aktual (Rp), dan Nilai Prediksi SVR (Rp) secara berdampingan untuk perbandingan langsung.
+- **Grafik Aktual vs Prediksi**: Visualisasi grafik garis — garis *solid* mewakili realisasi aktual dan garis *dashed* mewakili hasil peramalan model SVR.
+- **Kartu Skor Metrik (Metric Scorecard)**: Empat kartu informatif menampilkan nilai MAE, RMSE, MAPE (akurasi), dan R² dari model yang sedang aktif.
+
+#### b. Halaman Optimasi Parameter
+- **Tabel Komparasi Metode**: Tabel perbandingan hasil dua metode optimasi (Grid Search dan GWO), menampilkan kolom Metode, C, ε, γ, MAE, RMSE, MAPE, dan R² Score secara berdampingan.
+- **Grafik Perbandingan Performa**: Visualisasi grafik batang yang membandingkan tingkat error (MAPE) antara SVR Default, SVR + Grid Search, dan SVR + GWO.
+
+#### c. Dashboard
+- Ringkasan statistik realisasi vs target pendapatan parkir.
+- Tren pendapatan bulanan per Rayon dalam bentuk grafik interaktif.
+
+---
+
+### 10.4. Output Dokumen Laporan
+
+| Jenis Laporan | Format | Penerima | Isi |
+| :--- | :--- | :--- | :--- |
+| Laporan Prediksi Pendapatan | PDF | Kepala UPT, Kepala Dishub | Ringkasan eksekutif tren prediksi, metrik akurasi, grafik aktual vs prediksi |
+| Ekspor Data Prediksi | Excel (.xlsx) | Operator UPT Parkir | Tabel mentah hasil prediksi harian per tanggal dan rayon untuk audit internal |
 
 ---
 

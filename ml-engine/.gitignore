@@ -1,0 +1,18 @@
+# Python environment configurations
+.env
+
+# Python byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Testing cache
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# SVR model artifacts (binary files & metrics data)
+artifacts/*.pkl
+artifacts/*.json

@@ -12,7 +12,7 @@ class FastApiService
     public function __construct()
     {
         // Mendapatkan URL FastAPI dari file .env (nama container docker: http://python_api:8000)
-        $this->baseUrl = rtrim(config('services.fastapi.url', env('FASTAPI_URL', 'http://python_api:8000')), '/');
+        $this->baseUrl = rtrim(env('PYTHON_ML_API_URL', config('services.fastapi.url', env('FASTAPI_URL', 'http://python_api:8000'))), '/');
     }
 
     /**
@@ -57,6 +57,7 @@ class FastApiService
     {
         try {
             $response = Http::withHeaders($this->getHeaders())
+                            ->timeout(120)
                             ->get("{$this->baseUrl}/{$endpoint}", $query);
 
             if ($response->successful()) {
@@ -82,6 +83,7 @@ class FastApiService
     {
         try {
             $response = Http::withHeaders($this->getHeaders())
+                            ->timeout(300)
                             ->post("{$this->baseUrl}/{$endpoint}", $data);
 
             if ($response->successful()) {

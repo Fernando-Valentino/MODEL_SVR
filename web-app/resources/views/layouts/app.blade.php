@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Dashboard') - PREPAR</title>
+    <title>@yield('title', 'Dashboard') - REVORA</title>
     <!-- Google Fonts: Inter (primary font) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -61,5 +61,6 @@
             @endif
         });
     </script>
+    @yield('scripts')
 </body>
 </html>

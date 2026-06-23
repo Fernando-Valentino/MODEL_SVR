@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import os
 import holidays as pyholidays
+from sklearn.preprocessing import RobustScaler, MinMaxScaler
 from app.core.constants import LIBUR_NASIONAL_ID, JUKIR_MAP, FITUR_COLS
 
 def extract_features_for_day(tanggal_str: str, rayon: int, libur_manual_list: list = [], df_history_override: pd.DataFrame = None) -> np.ndarray:
@@ -88,3 +89,123 @@ def extract_features_for_day(tanggal_str: str, rayon: int, libur_manual_list: li
         
     df_row = df_state[(df_state['Tanggal'] == tgl_obj) & (df_state['Rayon'] == rayon)]
     return df_row[FITUR_COLS].values
+
+
+def roman_rayon(rayon_id: int) -> str:
+    mapping = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V"}
+    return mapping.get(rayon_id, str(rayon_id))
+
+
+def preprocess_dataset(dataset: list) -> dict:
+    df = pd.DataFrame(dataset)
+    df['Tanggal'] = pd.to_datetime(df['Tanggal'])
+    
+    # Hapus pendapatan = 0 kecuali hari libur
+    mask_hapus = (df['Total_Pendapatan'] == 0) & (df['Libur_Nasional'] != 1)
+    df = df[~mask_hapus].copy().reset_index(drop=True)
+    
+    # Mengisi pendapatan 0 pada hari libur dengan median pendapatan hari libur
+    median_libur = df[(df['Libur_Nasional'] == 1) & (df['Total_Pendapatan'] > 0)]['Total_Pendapatan'].median()
+    if pd.isna(median_libur): 
+        median_libur = 1000.0
+    df.loc[(df['Libur_Nasional'] == 1) & (df['Total_Pendapatan'] == 0), 'Total_Pendapatan'] = median_libur
+    
+    # Fitur temporal
+    df['Tahun']             = df['Tanggal'].dt.year
+    df['Bulan']             = df['Tanggal'].dt.month
+    df['Tanggal_Kalender']  = df['Tanggal'].dt.day
+    df['Hari_dalam_Minggu'] = df['Tanggal'].dt.dayofweek
+    df['Minggu_ke']         = df['Tanggal'].dt.isocalendar().week.astype(int)
+    
+    # Cyclical encoding
+    df['Hari_Minggu_sin']  = np.sin(2 * np.pi * df['Hari_dalam_Minggu'] / 7.0)
+    df['Hari_Minggu_cos']  = np.cos(2 * np.pi * df['Hari_dalam_Minggu'] / 7.0)
+    df['Tgl_Kalender_sin'] = np.sin(2 * np.pi * df['Tanggal_Kalender'] / 31.0)
+    df['Tgl_Kalender_cos'] = np.cos(2 * np.pi * df['Tanggal_Kalender'] / 31.0)
+    df['Minggu_sin']       = np.sin(2 * np.pi * df['Minggu_ke'] / 52.0)
+    df['Minggu_cos']       = np.cos(2 * np.pi * df['Minggu_ke'] / 52.0)
+    
+    # Encoding kategorikal
+    df['Libur_Nasional']     = df['Libur_Nasional'].astype(int)
+    df['Weekend']            = df['Weekend'].astype(int)
+    df['Libur_atau_Weekend'] = ((df['Libur_Nasional'] == 1) | (df['Weekend'] == 1)).astype(int)
+    
+    # Fitur Trend
+    df = df.sort_values('Tanggal').reset_index(drop=True)
+    df['Trend'] = (df['Tanggal'] - df['Tanggal'].min()).dt.days
+    
+    # Lag features per Rayon
+    df = df.sort_values(by=['Rayon', 'Tanggal']).reset_index(drop=True)
+    for lag in [1, 7, 14]:
+        df[f'Lag_{lag}'] = df.groupby('Rayon')['Total_Pendapatan'].shift(lag)
+    df['Lag_21'] = df.groupby('Rayon')['Total_Pendapatan'].shift(21)
+    
+    # Rolling features
+    df['Rolling_Mean_7']  = (df.groupby('Rayon')['Total_Pendapatan']
+                               .transform(lambda x: x.rolling(7).mean()).shift(1))
+    df['Rolling_Std_7']   = (df.groupby('Rayon')['Total_Pendapatan']
+                               .transform(lambda x: x.rolling(7).std()).shift(1))
+    df['Rolling_Mean_30'] = (df.groupby('Rayon')['Total_Pendapatan']
+                               .transform(lambda x: x.rolling(30).mean()).shift(1))
+    
+    # Ratio
+    df['Ratio_Lag7_Mean30'] = df['Lag_7'] / (df['Rolling_Mean_30'] + 1.0)
+    
+    # Simpan Rayon asli & One-Hot
+    df['Rayon_asli'] = df['Rayon'].copy()
+    
+    # Dummy encoding rayon secara manual untuk menjamin output konsisten
+    for r_id in range(1, 6):
+        df[f'Rayon_{r_id}'] = (df['Rayon'] == r_id).astype(int)
+        
+    # Interaksi Weekend x Rayon
+    for r_id in range(1, 6):
+        df[f'Weekend_Rayon_{r_id}'] = df['Weekend'] * df[f'Rayon_{r_id}']
+        
+    # Sort & hapus NaN
+    df = df.sort_values(by=['Tanggal']).reset_index(drop=True)
+    df.dropna(inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    
+    if len(df) < 10:
+        raise ValueError("Data setelah dibersihkan tidak cukup untuk training model.")
+        
+    # Data Splitting 80:20 secara kronologis
+    split_index = int(len(df) * 0.8)
+    df_train = df.iloc[:split_index].copy().reset_index(drop=True)
+    df_test = df.iloc[split_index:].copy().reset_index(drop=True)
+    
+    X_train_raw = df_train[FITUR_COLS].values
+    X_test_raw  = df_test[FITUR_COLS].values
+    
+    y_train_log = np.log1p(df_train['Total_Pendapatan'].values).reshape(-1, 1)
+    y_test_log  = np.log1p(df_test['Total_Pendapatan'].values).reshape(-1, 1)
+    
+    y_train_asli = df_train['Total_Pendapatan'].values.flatten()
+    y_test_asli  = df_test['Total_Pendapatan'].values.flatten()
+    
+    # Normalisasi
+    scaler_X = RobustScaler()
+    scaler_y = MinMaxScaler()
+    
+    X_train = scaler_X.fit_transform(X_train_raw)
+    y_train = scaler_y.fit_transform(y_train_log).ravel()
+    
+    X_test = scaler_X.transform(X_test_raw)
+    y_test = scaler_y.transform(y_test_log).ravel()
+    
+    return {
+        'df': df,
+        'df_train': df_train,
+        'df_test': df_test,
+        'X_train': X_train,
+        'y_train': y_train,
+        'X_test': X_test,
+        'y_test': y_test,
+        'y_train_asli': y_train_asli,
+        'y_test_asli': y_test_asli,
+        'scaler_X': scaler_X,
+        'scaler_y': scaler_y,
+        'split_index': split_index
+    }
+

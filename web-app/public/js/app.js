@@ -1,5 +1,5 @@
 /**
- * PREPAR - SISTEM PREDIKSI PENDAPATAN RETRIBUSI PARKIR
+ * REVORA - Revenue Estimation, Visualization, Optimization, Reporting, and Analytics
  * Front-end Client Script
  */
 
@@ -28,7 +28,7 @@ window.showToast = function(icon, title) {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('PREPAR Client Loaded Successfully');
+    console.log('REVORA Client Loaded Successfully');
 
     // Handle temporary action notifications
     const dismissAlerts = document.querySelectorAll('.alert-dismiss');

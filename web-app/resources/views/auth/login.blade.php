@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Sistem - PREPAR</title>
+    <title>Login Sistem - REVORA</title>
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -155,8 +155,8 @@
         <div class="login-card mb-4">
             <!-- Header Logo and Titles -->
             <div class="text-center mb-4 pb-4 border-bottom">
-                <div class="logo-placeholder">P</div>
-                <div class="app-name mb-1">PREPAR</div>
+                <div class="logo-placeholder">R</div>
+                <div class="app-name mb-1">REVORA</div>
                 <div class="app-subtitle">Sistem <strong>Prediksi</strong> Pendapatan Retribusi Parkir</div>
                 <div class="text-uppercase text-secondary fw-semibold mt-1" style="font-size: 10px; letter-spacing: 0.5px;">Dinas Perhubungan Kota Cirebon</div>
             </div>

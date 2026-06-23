@@ -55,6 +55,7 @@ Route::prefix('operator')->middleware(['auth', 'role:operator'])->name('operator
     // Modul Prediksi SVR
     Route::get('/prediksi', [OperatorPrediksiController::class, 'index'])->name('prediksi.index');
     Route::post('/prediksi/jalankan-svr', [OperatorPrediksiController::class, 'runSvr'])->name('prediksi.run-svr');
+    Route::post('/prediksi/reset-svr', [OperatorPrediksiController::class, 'resetSvr'])->name('prediksi.reset');
 
     // Modul Optimasi Parameter
     Route::get('/optimasi', [OperatorOptimasiController::class, 'index'])->name('optimasi.index');

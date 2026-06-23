@@ -9,10 +9,9 @@
         'operator.hari-libur',
     ]);
 @endphp
-
 <div class="sidebar">
     <div class="sidebar-brand">
-        <h2>PREPAR</h2>
+        <h2>REVORA</h2>
         <p>Dishub Kota Cirebon</p>
     </div>
 

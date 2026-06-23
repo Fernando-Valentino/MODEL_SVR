@@ -292,8 +292,8 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
         df_train = pre['df_train']
         
         logger.info(f"GWO: menjalankan search dengan {wolves} serigala, {iterations} iterasi, bounds C: [{c_min}, {c_max}], epsilon: [{epsilon_min}, {epsilon_max}], gamma: [{gamma_min}, {gamma_max}]")
-        # Run GWO parameter tuning using TimeSeriesSplit(n_splits=3, gap=3) on training set
-        tscv_gwo = TimeSeriesSplit(n_splits=3, gap=3)
+        # Run GWO parameter tuning using TimeSeriesSplit(n_splits=5, gap=3) on training set
+        tscv_gwo = TimeSeriesSplit(n_splits=5, gap=3)
         
         # log-scale bounds
         LB = np.array([np.log10(c_min), np.log10(epsilon_min), np.log10(gamma_min)])

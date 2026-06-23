@@ -1,4 +1,4 @@
-# Progress Pengembangan Sistem PREPAR (Prediksi & Optimasi Retribusi Parkir)
+# Progress Pengembangan Sistem REVORA (Revenue Estimation, Visualization, Optimization, Reporting, and Analytics)
 
 Dokumen ini mencatat ringkasan progres pengerjaan dan status pengembangan sistem prediksi retribusi parkir Dinas Perhubungan Kota Cirebon berbasis **Support Vector Regression (SVR)** dan **Grey Wolf Optimizer (GWO)**.
 
@@ -79,6 +79,13 @@ Pengujian otomatis telah dibuat lengkap untuk memastikan sistem tidak rusak saat
 ---
 
 ## 🚀 Rencana Langkah Selanjutnya (Roadmap)
-1. **Verifikasi Dataset Asli**: Melakukan unggah dataset riil parkir Dishub Cirebon terbaru dan mengevaluasi metrik MAPE model SVR hasil optimasi GWO.
-2. **Uji Coba UI/UX**: Uji coba visualisasi grafik Chart.js di frontend Laravel dengan data dinamis hasil prediksi dari backend Python.
-3. **Deployment**: Menyiapkan konfigurasi docker-compose untuk staging server atau production.
+1. **Penyempurnaan Modul Optimasi Parameter**:
+   - Melakukan penyesuaian akhir (finetuning) dan pengujian lebih lanjut untuk fitur Grid Search & GWO agar visualisasi dan pergerakan loading pipeline stabil 100%.
+2. **Dashboard Multi-Role**:
+   - Menyempurnakan dan mempercantik visualisasi dashboard untuk 3 aktor utama (Operator, Kepala UPT, Kepala Dishub) dengan chart ringkasan pendapatan, akurasi SVR, dan data real-time.
+3. **Modul Laporan**:
+   - Memperbaiki dan melengkapi fitur laporan hasil prediksi dan riwayat pendapatan retribusi baik dalam bentuk file PDF maupun ekspor Excel/CSV.
+4. **Portal Pengguna Kepala UPT & Kepala Dishub**:
+   - Menyempurnakan modul antarmuka visual khusus untuk Kepala UPT dan Dinas Perhubungan (Dishub) pada sub-menu prediksi, optimasi, dan ekspor laporan yang terotorisasi dengan benar.
+5. **Deployment & Staging**:
+   - Menyiapkan konfigurasi docker-compose untuk staging server atau production.

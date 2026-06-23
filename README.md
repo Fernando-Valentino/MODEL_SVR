@@ -18,7 +18,7 @@ graph TD
     PMA[phpMyAdmin - phpmyadmin] <-->|Port 8080| MySQL
 ```
 
-1. **Frontend & Auth Provider (Laravel 10 + Apache)**:
+1. **Frontend & Auth Provider (Laravel 13 + Apache)**:
    Mengelola autentikasi multi-role (Operator, Kepala UPT, Kepala Dishub), pencatatan master data, visualisasi dashboard, dan pelaporan (PDF/Excel).
 2. **Machine Learning Engine (FastAPI + Python 3.10)**:
    Mengelola preprocessing data, pelatihan model SVR, proses optimasi parameter (Grid Search & GWO), serta menyajikan endpoint peramalan/prediksi yang diamankan oleh JWT.
@@ -52,7 +52,7 @@ MODEL_SVR/
 │   ├── main.py               # Entrypoint uvicorn FastAPI
 │   ├── train.py              # Skrip eksekusi latih model mandiri
 │   └── requirements.txt      # Dependensi Python
-├── web-app/                  # Aplikasi Web Utama (Laravel 10)
+├── web-app/                  # Aplikasi Web Utama (Laravel 13)
 │   ├── app/                  # Controller, Models, Middleware & Services Laravel
 │   ├── bootstrap/            # Bootstrapping Laravel
 │   ├── config/               # File konfigurasi Laravel
@@ -155,7 +155,7 @@ Jika ingin menjalankan untuk kebutuhan pengembangan lokal langsung pada sistem o
    uvicorn main:app --reload --host 127.0.0.1 --port 8000
    ```
 
-#### 3. Setup Web Application (Laravel 10)
+#### 3. Setup Web Application (Laravel 13)
 1. Buka terminal baru dan masuk ke direktori `web-app`:
    ```bash
    cd web-app

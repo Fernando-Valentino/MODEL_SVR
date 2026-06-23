@@ -2,18 +2,13 @@
 
 Sistem Prediksi & Optimasi Pendapatan Retribusi Parkir Dinas Perhubungan Kota Cirebon menggunakan metode **Support Vector Regression (SVR)** yang dioptimasi dengan dua metode pencarian hyperparameter, yaitu **Grid Search** (metode exhaustif/diskrit) dan **Grey Wolf Optimizer (GWO)** (metode metaheuristik meta-populasi).
 
-Sistem ini dikembangkan menggunakan arsitektur terpisah (**decoupled / three-tier architecture**) yang membagi tanggung jawab secara jelas antara:
-*   **Web Application & Auth Provider (Laravel 13 + Apache)**: Mengelola otentikasi multi-role, pencatatan master data, visualisasi dashboard, dan pelaporan ekspor (PDF/Excel).
-*   **Computational Machine Learning Engine (FastAPI + Python 3.10)**: Menangani preprocessing data, pelatihan model SVR, proses pencarian parameter optimal, dan penyimpanan berkas model biner (`.pkl`).
-*   **Database Server (MySQL 8.0)**: Penyimpanan persisten untuk semua data transaksi parkir, data juru parkir, konfigurasi parameter, dan hak akses pengguna.
-
-Komunikasi data terintegrasi antar-layanan ini dilakukan melalui protokol **HTTP REST API** yang dilindungi menggunakan **API Key** keamanan dan tanda tangan **JWT (JSON Web Token)** dengan sesi aktif selama 6 jam.
+Sistem ini dikembangkan menggunakan arsitektur terpisah (**decoupled / three-tier architecture**) yang memisahkan antara antarmuka pengguna (Laravel) dan mesin kecerdasan buatan (FastAPI Python).
 
 ---
 
 ## 🏗️ Arsitektur Sistem
 
-Sistem ini terdiri dari 4 layanan utama yang dijalankan secara terintegrasi menggunakan Docker:
+Sistem ini terdiri dari 4 komponen utama yang dijalankan secara terintegrasi menggunakan Docker:
 
 ```mermaid
 graph TD
@@ -24,13 +19,16 @@ graph TD
 ```
 
 1. **Frontend & Auth Provider (Laravel 13 + Apache)**:
-   Mengelola autentikasi multi-role (Operator, Kepala UPT, Kepala Dishub), pencatatan master data, visualisasi dashboard, dan pelaporan (PDF/Excel).
-2. **Machine Learning Engine (FastAPI + Python 3.10)**:
-   Mengelola preprocessing data, pelatihan model SVR, proses optimasi parameter (Grid Search & GWO), serta menyajikan endpoint peramalan/prediksi yang diamankan oleh JWT.
-3. **Database (MySQL 8.0)**:
-   Penyimpanan terpusat untuk seluruh transaksi data parkir, data juru parkir, konfigurasi parameter, dan hak akses pengguna.
+   Mengelola otentikasi multi-role (Operator, Kepala UPT, Kepala Dishub) menggunakan `spatie/laravel-permission`, pencatatan master data (Rayon, Juru Parkir, Hari Libur/Weekend), visualisasi dashboard interaktif, serta pelaporan ekspor (PDF/Excel).
+2. **Computational Machine Learning Engine (FastAPI + Python 3.10)**:
+   Menangani preprocessing data, pelatihan model SVR, proses pencarian parameter optimal (Grid Search & GWO), serta menyajikan endpoint peramalan/prediksi. Berkas model biner hasil pelatihan disimpan secara persisten (`.pkl`).
+3. **Database Server (MySQL 8.0)**:
+   Penyimpanan persisten terpusat untuk semua data transaksi parkir, data juru parkir, konfigurasi parameter, dan hak akses pengguna.
 4. **phpMyAdmin**:
-   Antarmuka web untuk kemudahan pengelolaan dan pemantauan database MySQL secara langsung.
+   Antarmuka web untuk kemudahan pengelolaan, visualisasi, dan pemantauan database MySQL secara langsung.
+
+### Protokol Komunikasi & Keamanan
+Komunikasi data terintegrasi antar-layanan ini dilakukan melalui protokol **HTTP REST API** yang dilindungi menggunakan **API Key** keamanan dan tanda tangan **JWT (JSON Web Token)** dengan sesi aktif selama 6 jam (menyinkronkan masa kedaluwarsa sesi frontend Laravel `SESSION_LIFETIME=360` dan token JWT di backend).
 
 ---
 

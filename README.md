@@ -1,8 +1,13 @@
 # REVORA (Revenue Estimation, Visualization, Optimization, Reporting, and Analytics)
 
-Sistem Prediksi & Optimasi Pendapatan Retribusi Parkir Dinas Perhubungan Kota Cirebon menggunakan metode **Support Vector Regression (SVR)** yang dioptimasi dengan **Grey Wolf Optimizer (GWO)**.
+Sistem Prediksi & Optimasi Pendapatan Retribusi Parkir Dinas Perhubungan Kota Cirebon menggunakan metode **Support Vector Regression (SVR)** yang dioptimasi dengan dua metode pencarian hyperparameter, yaitu **Grid Search** (metode exhaustif/diskrit) dan **Grey Wolf Optimizer (GWO)** (metode metaheuristik meta-populasi).
 
-Sistem ini dikembangkan dengan arsitektur terpisah (**decoupled architecture**) yang memisahkan antara sistem manajemen data/antarmuka pengguna (Laravel) dan mesin kecerdasan buatan/prediksi (FastAPI Python).
+Sistem ini dikembangkan menggunakan arsitektur terpisah (**decoupled / three-tier architecture**) yang membagi tanggung jawab secara jelas antara:
+*   **Web Application & Auth Provider (Laravel 13 + Apache)**: Mengelola otentikasi multi-role, pencatatan master data, visualisasi dashboard, dan pelaporan ekspor (PDF/Excel).
+*   **Computational Machine Learning Engine (FastAPI + Python 3.10)**: Menangani preprocessing data, pelatihan model SVR, proses pencarian parameter optimal, dan penyimpanan berkas model biner (`.pkl`).
+*   **Database Server (MySQL 8.0)**: Penyimpanan persisten untuk semua data transaksi parkir, data juru parkir, konfigurasi parameter, dan hak akses pengguna.
+
+Komunikasi data terintegrasi antar-layanan ini dilakukan melalui protokol **HTTP REST API** yang dilindungi menggunakan **API Key** keamanan dan tanda tangan **JWT (JSON Web Token)** dengan sesi aktif selama 6 jam.
 
 ---
 

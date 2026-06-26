@@ -300,27 +300,50 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
         UB = np.array([np.log10(c_max), np.log10(epsilon_max), np.log10(gamma_max)])
         DIM = 3
         
-        np.random.seed(42)
+        seed = body.get("seed")
+        if seed is not None:
+            np.random.seed(int(seed))
+        else:
+            import time
+            np.random.seed(int(time.time()) % (2**32))
+            
         positions = np.random.uniform(0, 1, (wolves, DIM)) * (UB - LB) + LB
         
-        # Warm start: tanam 3 wolf di referensi optimal
-        REF_C_v2     = np.log10(199.5)
-        REF_EPS_v2   = np.log10(0.000316)
-        REF_GAMMA_v2 = np.log10(0.00677)
-        if wolves > 0:
-            positions[0] = np.clip([REF_C_v2, REF_EPS_v2, REF_GAMMA_v2], LB, UB)
+        # Warm start: tanam 3 wolf di referensi optimal atau parameter terbaik saat ini
+        best_c = body.get("best_c")
+        best_epsilon = body.get("best_epsilon")
+        best_gamma = body.get("best_gamma")
+        
+        if best_c is not None and best_epsilon is not None and best_gamma is not None:
+            logger.info(f"GWO menggunakan warm-start dari parameter terbaik saat ini: C={best_c}, epsilon={best_epsilon}, gamma={best_gamma}")
+            REF_C_v2 = np.log10(float(best_c))
+            REF_EPS_v2 = np.log10(float(best_epsilon))
+            REF_GAMMA_v2 = np.log10(float(best_gamma))
             
-        REF_C_v4     = np.log10(199.5)
-        REF_EPS_v4   = np.log10(0.005012)
-        REF_GAMMA_v4 = np.log10(0.00481)
-        if wolves > 1:
-            positions[1] = np.clip([REF_C_v4, REF_EPS_v4, REF_GAMMA_v4], LB, UB)
-            
-        REF_C_mid     = np.log10(199.5)
-        REF_EPS_mid   = np.log10((0.000316 + 0.005012) / 2.0)
-        REF_GAMMA_mid = np.log10((0.00677  + 0.00481)  / 2.0)
-        if wolves > 2:
-            positions[2] = np.clip([REF_C_mid, REF_EPS_mid, REF_GAMMA_mid], LB, UB)
+            if wolves > 0:
+                positions[0] = np.clip([REF_C_v2, REF_EPS_v2, REF_GAMMA_v2], LB, UB)
+            if wolves > 1:
+                positions[1] = np.clip([REF_C_v2 + 0.05, REF_EPS_v2 - 0.05, REF_GAMMA_v2 + 0.05], LB, UB)
+            if wolves > 2:
+                positions[2] = np.clip([REF_C_v2 - 0.05, REF_EPS_v2 + 0.05, REF_GAMMA_v2 - 0.05], LB, UB)
+        else:
+            REF_C_v2     = np.log10(199.5)
+            REF_EPS_v2   = np.log10(0.000316)
+            REF_GAMMA_v2 = np.log10(0.00677)
+            if wolves > 0:
+                positions[0] = np.clip([REF_C_v2, REF_EPS_v2, REF_GAMMA_v2], LB, UB)
+                
+            REF_C_v4     = np.log10(199.5)
+            REF_EPS_v4   = np.log10(0.005012)
+            REF_GAMMA_v4 = np.log10(0.00481)
+            if wolves > 1:
+                positions[1] = np.clip([REF_C_v4, REF_EPS_v4, REF_GAMMA_v4], LB, UB)
+                
+            REF_C_mid     = np.log10(199.5)
+            REF_EPS_mid   = np.log10((0.000316 + 0.005012) / 2.0)
+            REF_GAMMA_mid = np.log10((0.00677  + 0.00481)  / 2.0)
+            if wolves > 2:
+                positions[2] = np.clip([REF_C_mid, REF_EPS_mid, REF_GAMMA_mid], LB, UB)
         
         from joblib import Parallel, delayed
 

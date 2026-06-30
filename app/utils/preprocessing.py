@@ -22,6 +22,7 @@ def extract_features_for_day(tanggal_str: str, rayon: int, libur_manual_list: li
         if not os.path.exists(file_path):
             raise ValueError("Dataset CSV historis tidak ditemukan di server API.")
         df_history = pd.read_csv(file_path, parse_dates=['Tanggal'])
+        df_history = df_history.drop_duplicates(subset=['Tanggal', 'Rayon'], keep='last').reset_index(drop=True)
 
         # Preprocessing sama seperti training
         libur_nasional_id = pd.to_datetime(LIBUR_NASIONAL_ID)

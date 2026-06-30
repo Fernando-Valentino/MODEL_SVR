@@ -19,6 +19,7 @@ def get_jwt_token(credentials: HTTPAuthorizationCredentials = Depends(security_s
         payload = jwt.decode(
             token, 
             settings.jwt_secret, 
+            leeway=120,
             algorithms=[settings.jwt_algorithm]
         )
         

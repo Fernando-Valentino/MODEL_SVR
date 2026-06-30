@@ -54,6 +54,7 @@ print("✅ CELL 1 BERHASIL!")
 
 file_path = 'DATA_PENDAPATAN_PARKIR_PER_HARI_2023-2025.csv'
 df = pd.read_csv(file_path, parse_dates=['Tanggal'])
+df = df.drop_duplicates(subset=['Tanggal', 'Rayon'], keep='last').reset_index(drop=True)
 
 print("✅ CELL 2 BERHASIL!")
 print(f"   Shape   : {df.shape}")
@@ -92,7 +93,10 @@ libur_nasional_id = pd.to_datetime([
     '2026-03-23', '2026-03-24', '2026-04-03', '2026-04-05', '2026-05-01',
     '2026-05-14', '2026-05-15', '2026-05-27', '2026-05-28', '2026-05-31',
     '2026-06-01', '2026-06-16', '2026-08-17', '2026-08-25', '2026-12-24',
-    '2026-12-25'
+    '2026-12-25', '2027-01-01', '2027-01-05', '2027-02-06', '2027-03-09',
+    '2027-03-10', '2027-03-26', '2027-05-01', '2027-05-06', '2027-05-17',
+    '2027-05-20', '2027-06-01', '2027-06-06', '2027-08-15', '2027-08-17',
+    '2027-12-25', '2027-12-26'
 ])
 df['Libur_Nasional'] = df['Tanggal'].dt.normalize().isin(libur_nasional_id).astype(int)
 print(f"   ✅ Libur_Nasional: {df['Libur_Nasional'].sum()} hari libur terdeteksi")
@@ -124,7 +128,7 @@ df['Minggu_cos']       = np.cos(2 * np.pi * df['Minggu_ke'] / 52)
 
 # ── 4. Encoding kategorikal ──
 df['Libur_Nasional']     = df['Libur_Nasional'].astype(int)
-df['Weekend']            = df['Weekend'].astype(int)
+df['Weekend']            = (df['Tanggal'].dt.dayofweek >= 5).astype(int)
 df['Libur_atau_Weekend'] = ((df['Libur_Nasional'] == 1) | (df['Weekend'] == 1)).astype(int)
 
 # ── 4b. ✅ TAMBAH DI SINI — Fitur Trend ──────────────────────
@@ -535,18 +539,18 @@ print("=" * 60)
 NUM_WOLVES    = 12        # Lebih banyak wolf untuk coverage zona kecil
 MAX_ITER      = 20        # Lebih banyak iterasi
 DIM           = 3
-N_SPLITS_GWO  = 3
+N_SPLITS_GWO  = 5
 EARLY_STOP    = 8
 RESTART_FRAC  = 0.30
 PERTURB_STD   = 0.08      # Lebih kecil — zona sempit, perturb halus
 RESTART_EVERY = 3
 
-# Search space dipersempit & zona spesifik
-# C     : [180, 250]   → log10 = [2.255, 2.398]
-# ε     : [0.0002, 0.006] → log10 = [-3.699, -2.222]
-# γ     : [0.004, 0.012]  → log10 = [-2.398, -1.921]
-LB = np.array([2.255,  -3.699,  -2.398])   # C=180,    ε=0.0002, γ=0.004
-UB = np.array([2.398,  -2.222,  -1.921])   # C=250,    ε=0.0063, γ=0.012
+# Search space diperluas
+# C     : [10, 300]   → log10 = [1.0, 2.477]
+# ε     : [0.0001, 0.05] → log10 = [-4.0, -1.301]
+# γ     : [0.0005, 0.1]  → log10 = [-3.301, -1.0]
+LB = np.array([1.0,   -4.0,   -3.301])   # C=10,  ε=0.0001, γ=0.0005
+UB = np.array([2.477, -1.301, -1.0])    # C=300, ε=0.05,   γ=0.1
 
 print(f"  Wolves     : {NUM_WOLVES}")
 print(f"  Iterasi    : {MAX_ITER}")
@@ -603,8 +607,8 @@ delta_pos = np.zeros(DIM);  delta_score = float("inf")
 convergence_curve = []
 iter_best_log     = []
 
-# ✅ TimeSeriesSplit dengan gap
-tscv_gwo = TimeSeriesSplit(n_splits=N_SPLITS_GWO, gap=3)
+# ✅ TimeSeriesSplit tanpa gap
+tscv_gwo = TimeSeriesSplit(n_splits=N_SPLITS_GWO)
 
 # ─────────────────────────────────────────────
 # ✅ Fungsi fitness
@@ -1545,7 +1549,10 @@ libur_nasional_id = pd.to_datetime([
     '2026-03-23', '2026-03-24', '2026-04-03', '2026-04-05', '2026-05-01',
     '2026-05-14', '2026-05-15', '2026-05-27', '2026-05-28', '2026-05-31',
     '2026-06-01', '2026-06-16', '2026-08-17', '2026-08-25', '2026-12-24',
-    '2026-12-25'
+    '2026-12-25', '2027-01-01', '2027-01-05', '2027-02-06', '2027-03-09',
+    '2027-03-10', '2027-03-26', '2027-05-01', '2027-05-06', '2027-05-17',
+    '2027-05-20', '2027-06-01', '2027-06-06', '2027-08-15', '2027-08-17',
+    '2027-12-25', '2027-12-26'
 ])
 df_raw['Libur_Nasional_flag'] = df_raw['Tanggal'].dt.normalize().isin(libur_nasional_id).astype(int)
 
@@ -1696,7 +1703,23 @@ LIBUR_NAMES = {
     "2026-08-17": "Hari Kemerdekaan Republik Indonesia",
     "2026-08-25": "Maulid Nabi Muhammad SAW",
     "2026-12-24": "Cuti Bersama Hari Raya Natal",
-    "2026-12-25": "Hari Raya Natal"
+    "2026-12-25": "Hari Raya Natal",
+    "2027-01-01": "Tahun Baru 2027 Masehi",
+    "2027-01-05": "Isra Mi'raj Nabi Muhammad SAW",
+    "2027-02-06": "Tahun Baru Imlek 2578 Kongzili",
+    "2027-03-09": "Hari Suci Nyepi Tahun Baru Saka 1949",
+    "2027-03-10": "Hari Raya Idul Fitri 1448 Hijriyah",
+    "2027-03-26": "Wafat Yesus Kristus / Jumat Agung",
+    "2027-05-01": "Hari Buruh Internasional",
+    "2027-05-06": "Kenaikan Yesus Kristus",
+    "2027-05-17": "Hari Raya Idul Adha 1448 Hijriyah",
+    "2027-05-20": "Hari Raya Waisak 2571 BE",
+    "2027-06-01": "Hari Lahir Pancasila",
+    "2027-06-06": "Tahun Baru Islam 1449 Hijriyah",
+    "2027-08-15": "Maulid Nabi Muhammad SAW",
+    "2027-08-17": "Hari Kemerdekaan Republik Indonesia",
+    "2027-12-25": "Hari Raya Natal",
+    "2027-12-26": "Isra Mi'raj Nabi Muhammad SAW"
 }
 
 def _bdr():

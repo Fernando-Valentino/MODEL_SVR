@@ -152,33 +152,26 @@ async def train_grid_search(request: Request, token_data: dict = Depends(get_jwt
         df_train = pre['df_train']
         
         logger.info(f"Grid Search: menjalankan search dengan parameters C={c_parsed}, eps={eps_parsed}, gamma={gamma_parsed}")
-        # Run actual Grid Search using 5-Fold CV on training set
-        kf = KFold(n_splits=5, shuffle=False)
-        best_score = float('inf')
-        best_c = c_parsed[0] if c_parsed else 1.0
-        best_eps = eps_parsed[0] if eps_parsed else 0.1
-        best_gamma = gamma_parsed[0] if gamma_parsed else 'scale'
+        tscv = TimeSeriesSplit(n_splits=5)
+        from joblib import Parallel, delayed
         
-        for c in c_parsed:
-            for eps in eps_parsed:
-                for gam in gamma_parsed:
-                    scores = []
-                    for tr_idx, val_idx in kf.split(X_train):
-                        # Set max_iter to prevent hanging on slow convergence
-                        model = SVR(kernel='rbf', C=c, epsilon=eps, gamma=gam, cache_size=1000, max_iter=10000)
-                        model.fit(X_train[tr_idx], y_train[tr_idx])
-                        pred = model.predict(X_train[val_idx])
-                        fold_rmse = np.sqrt(mean_squared_error(y_train[val_idx], pred))
-                        scores.append(fold_rmse)
-                    avg_score = float(np.mean(scores))
-                    if avg_score < best_score:
-                        best_score = avg_score
-                        best_c = c
-                        best_eps = eps
-                        best_gamma = gam
+        def evaluate_params(c, eps, gam):
+            scores = []
+            for tr_idx, val_idx in tscv.split(X_train):
+                model = SVR(kernel='rbf', C=c, epsilon=eps, gamma=gam, cache_size=1000)
+                model.fit(X_train[tr_idx], y_train[tr_idx])
+                pred = model.predict(X_train[val_idx])
+                fold_rmse = np.sqrt(mean_squared_error(y_train[val_idx], pred))
+                scores.append(fold_rmse)
+            return float(np.mean(scores)), c, eps, gam
+            
+        tasks = [delayed(evaluate_params)(c, eps, gam) for c in c_parsed for eps in eps_parsed for gam in gamma_parsed]
+        results = Parallel(n_jobs=-1)(tasks)
+        
+        best_score, best_c, best_eps, best_gamma = min(results, key=lambda x: x[0])
         
         # Train final model on train set with best parameters
-        best_model = SVR(kernel='rbf', C=best_c, epsilon=best_eps, gamma=best_gamma, max_iter=20000)
+        best_model = SVR(kernel='rbf', C=best_c, epsilon=best_eps, gamma=best_gamma)
         best_model.fit(X_train, y_train)
         
         # Predict and evaluate on test set
@@ -196,7 +189,7 @@ async def train_grid_search(request: Request, token_data: dict = Depends(get_jwt
         accuracy = float(max(0.0, 100.0 - mape))
             
         # Fit a final model for predictions & to save as default model if needed
-        final_model = SVR(kernel='rbf', C=best_c, epsilon=best_eps, gamma=best_gamma, max_iter=20000)
+        final_model = SVR(kernel='rbf', C=best_c, epsilon=best_eps, gamma=best_gamma)
         final_model.fit(X_train, y_train)
         
         y_pred_scaled = final_model.predict(X_test)
@@ -271,12 +264,12 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
         dataset = body.get("dataset", [])
         wolves = int(body.get("wolves", 12))
         iterations = int(body.get("iterations", 20))
-        c_min = float(body.get("c_min", 179.9))
-        c_max = float(body.get("c_max", 250.0))
-        epsilon_min = float(body.get("epsilon_min", 0.0002))
-        epsilon_max = float(body.get("epsilon_max", 0.006))
-        gamma_min = float(body.get("gamma_min", 0.004))
-        gamma_max = float(body.get("gamma_max", 0.012))
+        c_min = float(body.get("c_min", 10.0))
+        c_max = float(body.get("c_max", 300.0))
+        epsilon_min = float(body.get("epsilon_min", 0.0001))
+        epsilon_max = float(body.get("epsilon_max", 0.05))
+        gamma_min = float(body.get("gamma_min", 0.0005))
+        gamma_max = float(body.get("gamma_max", 0.1))
         
         if not dataset:
             raise HTTPException(status_code=400, detail="Dataset tidak boleh kosong.")
@@ -292,20 +285,16 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
         df_train = pre['df_train']
         
         logger.info(f"GWO: menjalankan search dengan {wolves} serigala, {iterations} iterasi, bounds C: [{c_min}, {c_max}], epsilon: [{epsilon_min}, {epsilon_max}], gamma: [{gamma_min}, {gamma_max}]")
-        # Run GWO parameter tuning using TimeSeriesSplit(n_splits=5, gap=3) on training set
-        tscv_gwo = TimeSeriesSplit(n_splits=5, gap=3)
+        # Run GWO parameter tuning using TimeSeriesSplit(n_splits=5) on training set
+        tscv_gwo = TimeSeriesSplit(n_splits=5)
         
         # log-scale bounds
         LB = np.array([np.log10(c_min), np.log10(epsilon_min), np.log10(gamma_min)])
         UB = np.array([np.log10(c_max), np.log10(epsilon_max), np.log10(gamma_max)])
         DIM = 3
         
-        seed = body.get("seed")
-        if seed is not None:
-            np.random.seed(int(seed))
-        else:
-            import time
-            np.random.seed(int(time.time()) % (2**32))
+        seed = body.get("seed", 42)
+        np.random.seed(int(seed))
             
         positions = np.random.uniform(0, 1, (wolves, DIM)) * (UB - LB) + LB
         
@@ -355,8 +344,8 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
             C_val = 10 ** pos[0]
             eps_val = 10 ** pos[1]
             gamma_val = 10 ** pos[2]
-            # Use max_iter=2000 to keep iteration evaluation fast and avoid infinite/long fits.
-            model = SVR(kernel='rbf', C=C_val, epsilon=eps_val, gamma=gamma_val, cache_size=1000, max_iter=2000)
+            # Use max_iter=10000 to keep iteration evaluation fast and avoid infinite/long fits.
+            model = SVR(kernel='rbf', C=C_val, epsilon=eps_val, gamma=gamma_val, cache_size=1000, max_iter=10000)
             scores = cross_val_score(model, X_train, y_train, cv=tscv_gwo, scoring='neg_root_mean_squared_error', n_jobs=1)
             return -float(np.mean(scores))
             
@@ -436,7 +425,7 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
         best_gamma = float(10 ** alpha_pos[2])
         
         # Train final model on train set with best parameters
-        best_model = SVR(kernel='rbf', C=best_c, epsilon=best_eps, gamma=best_gamma, max_iter=20000)
+        best_model = SVR(kernel='rbf', C=best_c, epsilon=best_eps, gamma=best_gamma)
         best_model.fit(X_train, y_train)
         
         # Predict and evaluate on test set
@@ -454,7 +443,7 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
         accuracy = float(max(0.0, 100.0 - mape))
             
         # Fit a final model for predictions & to save as default model if needed
-        final_model = SVR(kernel='rbf', C=best_c, epsilon=best_eps, gamma=best_gamma, max_iter=20000)
+        final_model = SVR(kernel='rbf', C=best_c, epsilon=best_eps, gamma=best_gamma)
         final_model.fit(X_train, y_train)
         
         y_pred_scaled = final_model.predict(X_test)

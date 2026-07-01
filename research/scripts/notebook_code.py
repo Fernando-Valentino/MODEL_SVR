@@ -246,7 +246,7 @@ plt.title('Heatmap Korelasi Antar Fitur dan Target\n(Data Training 2023–2024)'
 plt.xticks(rotation=45, ha='right', fontsize=8)
 plt.yticks(rotation=0, fontsize=8)
 plt.tight_layout()
-plt.savefig('heatmap_korelasi.png', dpi=150, bbox_inches='tight')
+plt.savefig('plots/heatmap_korelasi.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 print("\n📊 Ranking Korelasi terhadap Target:")
@@ -953,7 +953,7 @@ else:
     ax2.set_facecolor('#F8F9FA')
 
     plt.tight_layout()
-    plt.savefig('konvergensi_3model.png', dpi=150, bbox_inches='tight')
+    plt.savefig('plots/konvergensi_3model.png', dpi=150, bbox_inches='tight')
     plt.show()
     print("✅ CELL 10 BERHASIL: Grafik Konvergensi 3 Model selesai!")
 # ==========================================
@@ -1001,7 +1001,7 @@ for y_pred, nama, warna in scatter_data:
     plt.legend(loc='upper left', fontsize=9)
     plt.tight_layout()
 
-    filename = f"scatter_{nama.lower().replace('+', '').replace(' ', '_')}.png"
+    filename = f"plots/scatter_{nama.lower().replace('+', '').replace(' ', '_')}.png"
     plt.savefig(filename, dpi=150, bbox_inches='tight')
     plt.show()
     print(f"   ✅ Tersimpan: {filename}")
@@ -1163,7 +1163,7 @@ else:
     axes[0].set_xlim(-1, n_zoom)
 
     # ─── Simpan ─────────────────────────────────────────────
-    plt.savefig('plot_aktual_vs_prediksi_smooth.png',
+    plt.savefig('plots/plot_aktual_vs_prediksi_smooth.png',
                 dpi=160, bbox_inches='tight', facecolor='white')
     plt.show()
 

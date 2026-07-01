@@ -318,7 +318,7 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
             positions[2] = np.clip([REF_C_mid, REF_EPS_mid, REF_GAMMA_mid], LB, UB)
         
         from joblib import Parallel, delayed
-
+ 
         alpha_pos = np.zeros(DIM); alpha_score = float("inf")
         beta_pos  = np.zeros(DIM); beta_score  = float("inf")
         delta_pos = np.zeros(DIM); delta_score = float("inf")
@@ -327,7 +327,7 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
             C_val = 10 ** pos[0]
             eps_val = 10 ** pos[1]
             gamma_val = 10 ** pos[2]
-            model = SVR(kernel='rbf', C=C_val, epsilon=eps_val, gamma=gamma_val, cache_size=2000)
+            model = SVR(kernel='rbf', C=C_val, epsilon=eps_val, gamma=gamma_val, cache_size=2000, max_iter=10000)
             scores = cross_val_score(model, X_train, y_train, cv=tscv_gwo, scoring='neg_root_mean_squared_error', n_jobs=-1)
             return -float(np.mean(scores))
             

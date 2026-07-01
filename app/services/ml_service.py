@@ -20,17 +20,33 @@ class MLService:
 
     def _load_artifacts(self):
         try:
-            model_path = os.path.join(self.artifacts_dir, 'svr_gwo_model.pkl')
-            scaler_X_path = os.path.join(self.artifacts_dir, 'scaler_X.pkl')
-            scaler_y_path = os.path.join(self.artifacts_dir, 'scaler_y.pkl')
-
-            if os.path.exists(model_path):
+            # Prefer GWO, then Grid Search, then Default
+            model_names = ['svr_gwo_model.pkl', 'svr_grid_search_model.pkl', 'svr_default_model.pkl']
+            model_path = None
+            
+            for m_name in model_names:
+                p = os.path.join(self.artifacts_dir, m_name)
+                if os.path.exists(p):
+                    model_path = p
+                    break
+                    
+            if model_path:
                 self.model = joblib.load(model_path)
+                
+                # Check for appropriate scalers (default back to general scaler_X/y)
+                scaler_X_path = os.path.join(self.artifacts_dir, 'scaler_X.pkl')
+                if not os.path.exists(scaler_X_path):
+                    scaler_X_path = os.path.join(self.artifacts_dir, 'scaler_X_default.pkl')
+                    
+                scaler_y_path = os.path.join(self.artifacts_dir, 'scaler_y.pkl')
+                if not os.path.exists(scaler_y_path):
+                    scaler_y_path = os.path.join(self.artifacts_dir, 'scaler_y_default.pkl')
+                
                 self.scaler_X = joblib.load(scaler_X_path)
                 self.scaler_y = joblib.load(scaler_y_path)
-                logger.info("ML artifacts loaded successfully.")
+                logger.info(f"ML artifacts loaded successfully using model: {os.path.basename(model_path)}.")
             else:
-                logger.warning(f"ML artifacts not found in {self.artifacts_dir}.")
+                logger.warning(f"No ML artifacts found in {self.artifacts_dir}.")
         except Exception as e:
             logger.error(f"Error loading artifacts: {str(e)}")
 

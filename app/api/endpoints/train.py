@@ -158,7 +158,7 @@ async def train_grid_search(request: Request, token_data: dict = Depends(get_jwt
         def evaluate_params(c, eps, gam):
             scores = []
             for tr_idx, val_idx in tscv.split(X_train):
-                model = SVR(kernel='rbf', C=c, epsilon=eps, gamma=gam, cache_size=1000)
+                model = SVR(kernel='rbf', C=c, epsilon=eps, gamma=gam, cache_size=1000, max_iter=10000)
                 model.fit(X_train[tr_idx], y_train[tr_idx])
                 pred = model.predict(X_train[val_idx])
                 fold_rmse = np.sqrt(mean_squared_error(y_train[val_idx], pred))
@@ -262,8 +262,8 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
     try:
         body = await request.json()
         dataset = body.get("dataset", [])
-        wolves = int(body.get("wolves", 12))
-        iterations = int(body.get("iterations", 20))
+        wolves = int(body.get("wolves", 15))
+        iterations = int(body.get("iterations", 30))
         c_min = float(body.get("c_min", 10.0))
         c_max = float(body.get("c_max", 300.0))
         epsilon_min = float(body.get("epsilon_min", 0.0001))
@@ -298,41 +298,24 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
             
         positions = np.random.uniform(0, 1, (wolves, DIM)) * (UB - LB) + LB
         
-        # Warm start: tanam 3 wolf di referensi optimal atau parameter terbaik saat ini
-        best_c = body.get("best_c")
-        best_epsilon = body.get("best_epsilon")
-        best_gamma = body.get("best_gamma")
-        
-        if best_c is not None and best_epsilon is not None and best_gamma is not None:
-            logger.info(f"GWO menggunakan warm-start dari parameter terbaik saat ini: C={best_c}, epsilon={best_epsilon}, gamma={best_gamma}")
-            REF_C_v2 = np.log10(float(best_c))
-            REF_EPS_v2 = np.log10(float(best_epsilon))
-            REF_GAMMA_v2 = np.log10(float(best_gamma))
+        # Warm start: tanam 3 wolf di referensi optimal v2, v4, dan midpoint (sesuai notebook GWO v5)
+        REF_C_v2     = np.log10(199.5)
+        REF_EPS_v2   = np.log10(0.000316)
+        REF_GAMMA_v2 = np.log10(0.00677)
+        if wolves > 0:
+            positions[0] = np.clip([REF_C_v2, REF_EPS_v2, REF_GAMMA_v2], LB, UB)
             
-            if wolves > 0:
-                positions[0] = np.clip([REF_C_v2, REF_EPS_v2, REF_GAMMA_v2], LB, UB)
-            if wolves > 1:
-                positions[1] = np.clip([REF_C_v2 + 0.05, REF_EPS_v2 - 0.05, REF_GAMMA_v2 + 0.05], LB, UB)
-            if wolves > 2:
-                positions[2] = np.clip([REF_C_v2 - 0.05, REF_EPS_v2 + 0.05, REF_GAMMA_v2 - 0.05], LB, UB)
-        else:
-            REF_C_v2     = np.log10(199.5)
-            REF_EPS_v2   = np.log10(0.000316)
-            REF_GAMMA_v2 = np.log10(0.00677)
-            if wolves > 0:
-                positions[0] = np.clip([REF_C_v2, REF_EPS_v2, REF_GAMMA_v2], LB, UB)
-                
-            REF_C_v4     = np.log10(199.5)
-            REF_EPS_v4   = np.log10(0.005012)
-            REF_GAMMA_v4 = np.log10(0.00481)
-            if wolves > 1:
-                positions[1] = np.clip([REF_C_v4, REF_EPS_v4, REF_GAMMA_v4], LB, UB)
-                
-            REF_C_mid     = np.log10(199.5)
-            REF_EPS_mid   = np.log10((0.000316 + 0.005012) / 2.0)
-            REF_GAMMA_mid = np.log10((0.00677  + 0.00481)  / 2.0)
-            if wolves > 2:
-                positions[2] = np.clip([REF_C_mid, REF_EPS_mid, REF_GAMMA_mid], LB, UB)
+        REF_C_v4     = np.log10(199.5)
+        REF_EPS_v4   = np.log10(0.005012)
+        REF_GAMMA_v4 = np.log10(0.00481)
+        if wolves > 1:
+            positions[1] = np.clip([REF_C_v4, REF_EPS_v4, REF_GAMMA_v4], LB, UB)
+            
+        REF_C_mid     = np.log10(199.5)
+        REF_EPS_mid   = np.log10((0.000316 + 0.005012) / 2.0)
+        REF_GAMMA_mid = np.log10((0.00677  + 0.00481)  / 2.0)
+        if wolves > 2:
+            positions[2] = np.clip([REF_C_mid, REF_EPS_mid, REF_GAMMA_mid], LB, UB)
         
         from joblib import Parallel, delayed
 
@@ -344,23 +327,23 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
             C_val = 10 ** pos[0]
             eps_val = 10 ** pos[1]
             gamma_val = 10 ** pos[2]
-            # Use max_iter=10000 to keep iteration evaluation fast and avoid infinite/long fits.
-            model = SVR(kernel='rbf', C=C_val, epsilon=eps_val, gamma=gamma_val, cache_size=1000, max_iter=10000)
-            scores = cross_val_score(model, X_train, y_train, cv=tscv_gwo, scoring='neg_root_mean_squared_error', n_jobs=1)
+            model = SVR(kernel='rbf', C=C_val, epsilon=eps_val, gamma=gamma_val, cache_size=2000)
+            scores = cross_val_score(model, X_train, y_train, cv=tscv_gwo, scoring='neg_root_mean_squared_error', n_jobs=-1)
             return -float(np.mean(scores))
             
-        no_improve_count = 0
-        prev_alpha_score = float("inf")
         EARLY_STOP = 8
         RESTART_EVERY = 3
         RESTART_FRAC = 0.30
         PERTURB_STD = 0.08
+        prev_alpha_score = float("inf")
+        no_improve_count = 0
         
+        convergence_log = []
         for t in range(iterations):
-            # Parallelize the evaluation of the wolves
-            wolves_score = Parallel(n_jobs=-1)(
-                delayed(fitness)(positions[i]) for i in range(wolves)
-            )
+            wolves_score = []
+            for i in range(wolves):
+                fit = fitness(positions[i])
+                wolves_score.append(fit)
             
             for i in range(wolves):
                 fit = wolves_score[i]
@@ -397,15 +380,28 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
                     X3 = delta_pos[j] - A3 * D_delta
                     
                     positions[i, j] = np.clip((X1 + X2 + X3) / 3.0, LB[j], UB[j])
-                    
+            
+            # Record iteration details to convergence log
+            convergence_log.append({
+                "iteration": t + 1,
+                "alpha_rmse": float(alpha_score),
+                "beta_rmse": float(beta_score),
+                "delta_rmse": float(delta_score),
+                "wolf_min": float(min(wolves_score)),
+                "wolf_mean": float(np.mean(wolves_score)),
+                "wolf_max": float(max(wolves_score)),
+                "c_value": float(10 ** alpha_pos[0]),
+                "epsilon_value": float(10 ** alpha_pos[1]),
+                "gamma_value": float(10 ** alpha_pos[2])
+            })
+            
+            # Random Restart: perturb wolf yang stagnan agar tidak terjebak lokal optima
             improved = alpha_score < prev_alpha_score - 1e-6
             if improved:
                 no_improve_count = 0
                 prev_alpha_score = alpha_score
             else:
                 no_improve_count += 1
-                
-                # Random Restart
                 if no_improve_count % RESTART_EVERY == 0:
                     n_restart = max(1, int(wolves * RESTART_FRAC))
                     restart_idx = np.random.choice(wolves, n_restart, replace=False)
@@ -417,7 +413,6 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
                         
                 # Early Stopping
                 if no_improve_count >= EARLY_STOP:
-                    logger.info(f"GWO Early stopping triggered at iteration {t+1}")
                     break
         
         best_c = float(10 ** alpha_pos[0])
@@ -502,7 +497,8 @@ async def train_gwo(request: Request, token_data: dict = Depends(get_jwt_token))
                 "r2": r2,
                 "accuracy": accuracy
             },
-            "predictions": predictions_list
+            "predictions": predictions_list,
+            "convergence_log": convergence_log
         }
     except Exception as e:
         logger.error(f"Error pada training SVR GWO: {str(e)}")

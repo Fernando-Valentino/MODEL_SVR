@@ -41,6 +41,7 @@ def train_and_evaluate():
         raise FileNotFoundError(f"File {file_path} tidak ditemukan!")
 
     df = pd.read_csv(file_path, parse_dates=['Tanggal'])
+    df = df.drop_duplicates(subset=['Tanggal', 'Rayon'], keep='last').reset_index(drop=True)
     
     # [SNAPSHOT] Simpan 5 baris data mentah pertama untuk dikonsumsi UI (Step 1)
     df_temp_raw = df.head(5).copy()

@@ -418,7 +418,7 @@ for combo_idx, params in enumerate(candidates, 1):
     fold_start  = time.time()
 
     for fold_idx, (tr_idx, val_idx) in enumerate(tscv_gs.split(X_train), 1):
-        m = SVR(kernel='rbf', cache_size=500, **params)
+        m = SVR(kernel='rbf', cache_size=500, max_iter=10000, **params)
         m.fit(X_train[tr_idx], y_train[tr_idx])
         rmse = np.sqrt(mean_squared_error(y_train[val_idx], m.predict(X_train[val_idx])))
         fold_scores.append(rmse)
@@ -470,7 +470,7 @@ pbar.close()
 # ─────────────────────────────────────────────
 # Training model final
 # ─────────────────────────────────────────────
-svr_gs = SVR(kernel='rbf', cache_size=500, **best_params)
+svr_gs = SVR(kernel='rbf', **best_params)
 svr_gs.fit(X_train, y_train)
 
 y_pred_gs_train = inverse_pred(svr_gs.predict(X_train))
@@ -804,8 +804,7 @@ svr_gwo = SVR(
     kernel    = 'rbf',
     C         = BEST_C,
     epsilon   = BEST_EPS,
-    gamma     = BEST_GAMMA,
-    cache_size= 2000
+    gamma     = BEST_GAMMA
 )
 svr_gwo.fit(X_train, y_train)
 

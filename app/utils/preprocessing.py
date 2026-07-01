@@ -101,6 +101,9 @@ def preprocess_dataset(dataset: list) -> dict:
     df = pd.DataFrame(dataset)
     df['Tanggal'] = pd.to_datetime(df['Tanggal'])
     
+    # Drop duplicates to match the Jupyter notebook exactly
+    df = df.drop_duplicates(subset=['Tanggal', 'Rayon'], keep='last').reset_index(drop=True)
+    
     # Hapus pendapatan = 0 kecuali hari libur
     mask_hapus = (df['Total_Pendapatan'] == 0) & (df['Libur_Nasional'] != 1)
     df = df[~mask_hapus].copy().reset_index(drop=True)

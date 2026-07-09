@@ -108,7 +108,8 @@ async def train_svr_default(request: Request, token_data: dict = Depends(get_jwt
                 "r2": r2,
                 "accuracy": accuracy
             },
-            "predictions": predictions_list
+            "predictions": predictions_list,
+            "pipeline_snapshots": pre.get("pipeline_snapshots", {})
         }
         
     except Exception as e:

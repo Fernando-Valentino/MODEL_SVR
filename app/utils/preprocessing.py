@@ -104,6 +104,30 @@ def preprocess_dataset(dataset: list) -> dict:
     # Drop duplicates to match the Jupyter notebook exactly
     df = df.drop_duplicates(subset=['Tanggal', 'Rayon'], keep='last').reset_index(drop=True)
     
+    # Helper to convert records to native Python types for JSON compatibility
+    def to_serializable_records(dataframe):
+        records = dataframe.to_dict(orient='records')
+        serializable = []
+        for r in records:
+            new_r = {}
+            for k, v in r.items():
+                if isinstance(v, (np.integer, np.int64, np.int32)):
+                    new_r[k] = int(v)
+                elif isinstance(v, (np.floating, np.float64, np.float32)):
+                    new_r[k] = float(v)
+                elif isinstance(v, pd.Timestamp):
+                    new_r[k] = v.strftime('%Y-%m-%d')
+                elif pd.isna(v):
+                    new_r[k] = None
+                else:
+                    new_r[k] = v
+            serializable.append(new_r)
+        return serializable
+
+    # Stage 1: Raw Snapshot (first 10 records)
+    df_raw = df.copy()
+    raw_snapshot = to_serializable_records(df_raw.head(10))
+    
     # Hapus pendapatan = 0 kecuali hari libur
     mask_hapus = (df['Total_Pendapatan'] == 0) & (df['Libur_Nasional'] != 1)
     df = df[~mask_hapus].copy().reset_index(drop=True)
@@ -113,6 +137,9 @@ def preprocess_dataset(dataset: list) -> dict:
     if pd.isna(median_libur): 
         median_libur = 1000.0
     df.loc[(df['Libur_Nasional'] == 1) & (df['Total_Pendapatan'] == 0), 'Total_Pendapatan'] = median_libur
+    
+    # Stage 2: Cleaned Snapshot
+    cleaned_snapshot = to_serializable_records(df.head(10))
     
     # Fitur temporal
     df['Tahun']             = df['Tanggal'].dt.year
@@ -174,10 +201,32 @@ def preprocess_dataset(dataset: list) -> dict:
     if len(df) < 10:
         raise ValueError("Data setelah dibersihkan tidak cukup untuk training model.")
         
+    # Stage 3: Feature Engineering Snapshot (first 10 records, key columns)
+    fe_cols = ['Tanggal', 'Rayon_asli', 'Weekend', 'Libur_Nasional', 
+               'Hari_Minggu_sin', 'Hari_Minggu_cos', 'Lag_1', 'Lag_7', 
+               'Rolling_Mean_7', 'Rolling_Mean_30', 'Rayon_1', 'Weekend_Rayon_1']
+    df_fe_snapshot = df.head(10).copy()
+    fe_snapshot = to_serializable_records(df_fe_snapshot[fe_cols])
+    
+    # Stage 4: Transformation Snapshot (first 10 records)
+    df_trans_snapshot = df.head(10).copy()
+    df_trans_snapshot['Total_Pendapatan_log'] = np.log1p(df_trans_snapshot['Total_Pendapatan'])
+    transformed_snapshot = to_serializable_records(df_trans_snapshot[['Tanggal', 'Rayon_asli', 'Total_Pendapatan', 'Total_Pendapatan_log']])
+        
     # Data Splitting 80:20 secara kronologis
     split_index = int(len(df) * 0.8)
     df_train = df.iloc[:split_index].copy().reset_index(drop=True)
     df_test = df.iloc[split_index:].copy().reset_index(drop=True)
+    
+    # Stage 5: Splitting Info
+    split_snapshot = {
+        'train_count': int(len(df_train)),
+        'test_count': int(len(df_test)),
+        'train_start_date': df_train['Tanggal'].min().strftime('%Y-%m-%d'),
+        'train_end_date': df_train['Tanggal'].max().strftime('%Y-%m-%d'),
+        'test_start_date': df_test['Tanggal'].min().strftime('%Y-%m-%d'),
+        'test_end_date': df_test['Tanggal'].max().strftime('%Y-%m-%d'),
+    }
     
     X_train_raw = df_train[FITUR_COLS].values
     X_test_raw  = df_test[FITUR_COLS].values
@@ -198,6 +247,29 @@ def preprocess_dataset(dataset: list) -> dict:
     X_test = scaler_X.transform(X_test_raw)
     y_test = scaler_y.transform(y_test_log).ravel()
     
+    # Stage 6: Normalization Snapshot
+    normalized_snapshot = []
+    for i in range(min(10, len(X_train))):
+        normalized_snapshot.append({
+            'tanggal': df_train.iloc[i]['Tanggal'].strftime('%Y-%m-%d'),
+            'rayon': int(df_train.iloc[i]['Rayon_asli']),
+            'y_original': float(df_train.iloc[i]['Total_Pendapatan']),
+            'y_log': float(y_train_log[i][0]),
+            'y_scaled': float(y_train[i]),
+            'x_scaled_lag1': float(X_train[i][FITUR_COLS.index('Lag_1')]),
+            'x_scaled_rolling7': float(X_train[i][FITUR_COLS.index('Rolling_Mean_7')]),
+            'x_scaled_trend': float(X_train[i][FITUR_COLS.index('Trend')]),
+        })
+        
+    pipeline_snapshots = {
+        'raw_snapshot': raw_snapshot,
+        'cleaned_snapshot': cleaned_snapshot,
+        'fe_snapshot': fe_snapshot,
+        'transformed_snapshot': transformed_snapshot,
+        'normalized_snapshot': normalized_snapshot,
+        'split_snapshot': split_snapshot
+    }
+    
     return {
         'df': df,
         'df_train': df_train,
@@ -210,6 +282,7 @@ def preprocess_dataset(dataset: list) -> dict:
         'y_test_asli': y_test_asli,
         'scaler_X': scaler_X,
         'scaler_y': scaler_y,
-        'split_index': split_index
+        'split_index': split_index,
+        'pipeline_snapshots': pipeline_snapshots
     }
 

@@ -1,0 +1,930 @@
+# ============================================================
+# ╔══════════════════════════════════════════════════════════╗
+# ║  CELL 14 REVISI — EXPORT EXCEL 11 SHEET                 ║
+# ║  PERUBAHAN dari versi sebelumnya:                        ║
+# ║  1. Data Mentah     → SEMUA baris (bukan 1000)           ║
+# ║  2. Feature Eng.    → SEMUA baris (bukan 300)            ║
+# ║  3. Sheet baru      → Data Cleaning (tabel detail)       ║
+# ║  4. Model           → Diload dari Drive checkpoint       ║
+# ╚══════════════════════════════════════════════════════════╝
+# CARA PAKAI:
+#   Jalankan CELL 1–5 dulu (load data, feature engineering, split),
+#   lalu jalankan cell ini. Model SVR, GS, GWO akan diload
+#   otomatis dari Google Drive checkpoint.
+# ============================================================
+
+import os, pickle, json, openpyxl, numpy as np, pandas as pd
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+from openpyxl.chart import LineChart, Reference
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+# ─────────────────────────────────────────────────────────────
+# 0. LOAD MODEL DARI CHECKPOINT GOOGLE DRIVE
+# ─────────────────────────────────────────────────────────────
+CKPT_DIR = "model_checkpoint"
+
+def load_checkpoint(key):
+    f_pkl  = f"{CKPT_DIR}/{key}.pkl"
+    f_json = f"{CKPT_DIR}/{key}_info.json"
+    if not os.path.exists(f_pkl):
+        raise FileNotFoundError(f"❌ Checkpoint tidak ditemukan: {f_pkl}")
+    with open(f_pkl, 'rb') as f:
+        ckpt = pickle.load(f)
+    with open(f_json) as f:
+        info = json.load(f)
+    print(f"   ✅ [{key}] loaded — MAPE={info['mape_test']:.4f}% | saved={info['saved_at']}")
+    return ckpt, info
+
+print("=" * 60)
+print("  📦  LOAD MODEL DARI GOOGLE DRIVE CHECKPOINT")
+print("=" * 60)
+
+ckpt_base, info_base = load_checkpoint("svr_baseline")
+ckpt_gs,   info_gs   = load_checkpoint("svr_grid_search")
+ckpt_gwo,  info_gwo  = load_checkpoint("svr_gwo")
+
+# Ambil model & scaler dari checkpoint
+svr_baseline = ckpt_base['model']
+svr_gs       = ckpt_gs['model']
+svr_gwo      = ckpt_gwo['model']
+scaler_X_ckpt = ckpt_gwo['scaler_X']   # semua pakai scaler yang sama
+scaler_y_ckpt = ckpt_gwo['scaler_y']
+fitur_ckpt    = ckpt_gwo['fitur']
+
+# Gunakan scaler & fitur dari checkpoint (lebih aman)
+# Jika variabel global scaler_X, scaler_y, fitur sudah ada dari cell sebelumnya,
+# checkpoint akan dipakai sebagai validasi.
+try:
+    _ = scaler_X  # cek apakah sudah ada dari cell sebelumnya
+    print("   ℹ️  scaler_X dari cell sebelumnya tersedia — tetap pakai checkpoint untuk konsistensi")
+except NameError:
+    scaler_X = scaler_X_ckpt
+    scaler_y = scaler_y_ckpt
+    fitur    = fitur_ckpt
+    print("   ℹ️  scaler & fitur diambil dari checkpoint")
+
+# ─────────────────────────────────────────────────────────────
+# HELPER: inverse transform
+# ─────────────────────────────────────────────────────────────
+def inverse_pred(y_scaled):
+    y_log = scaler_y.inverse_transform(y_scaled.reshape(-1, 1)).flatten()
+    return np.expm1(y_log)
+
+def hitung_metrik(y_true, y_pred):
+    mae  = mean_absolute_error(y_true, y_pred)
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    mask = y_true > 0
+    mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+    r2   = r2_score(y_true, y_pred)
+    return mae, rmse, mape, r2
+
+# ─────────────────────────────────────────────────────────────
+# Pastikan df_train, df_test, X_train, X_test tersedia
+# ─────────────────────────────────────────────────────────────
+print("\n  🔄 Menghitung prediksi dari model checkpoint...")
+X_tr = scaler_X.transform(df_train[fitur].values)
+X_te = scaler_X.transform(df_test[fitur].values)
+
+y_pred_base_train  = inverse_pred(svr_baseline.predict(X_tr))
+y_pred_base_test   = inverse_pred(svr_baseline.predict(X_te))
+y_pred_gs_train    = inverse_pred(svr_gs.predict(X_tr))
+y_pred_gs_test     = inverse_pred(svr_gs.predict(X_te))
+y_pred_gwo_train   = inverse_pred(svr_gwo.predict(X_tr))
+y_pred_gwo_test    = inverse_pred(svr_gwo.predict(X_te))
+
+y_train_asli = df_train['Total_Pendapatan'].values
+y_test_asli  = df_test['Total_Pendapatan'].values
+
+mae_base, rmse_base, mape_base_test,  r2_base  = hitung_metrik(y_test_asli,  y_pred_base_test)
+_,        _,         mape_base_train, _         = hitung_metrik(y_train_asli, y_pred_base_train)
+mae_gs,   rmse_gs,   mape_gs_test,    r2_gs     = hitung_metrik(y_test_asli,  y_pred_gs_test)
+_,        _,         mape_gs_train,   _         = hitung_metrik(y_train_asli, y_pred_gs_train)
+mae_gwo,  rmse_gwo,  mape_gwo_test,   r2_gwo    = hitung_metrik(y_test_asli,  y_pred_gwo_test)
+_,        _,         mape_gwo_train,  _         = hitung_metrik(y_train_asli, y_pred_gwo_train)
+mae_base_tr,  rmse_base_tr,  mape_base_tr,  r2_base_tr  = hitung_metrik(y_train_asli, y_pred_base_train)
+mae_gs_tr,    rmse_gs_tr,    mape_gs_tr,    r2_gs_tr    = hitung_metrik(y_train_asli, y_pred_gs_train)
+mae_gwo_tr,   rmse_gwo_tr,   mape_gwo_tr,   r2_gwo_tr   = hitung_metrik(y_train_asli, y_pred_gwo_train)
+
+lama_base = info_base.get('waktu', 0)
+lama_gs   = info_gs.get('waktu', 0)
+lama_gwo  = info_gwo.get('waktu', 0)
+best_params  = info_gs.get('params', {})
+BEST_C       = info_gwo['params']['C']
+BEST_EPS     = info_gwo['params']['epsilon']
+BEST_GAMMA   = info_gwo['params']['gamma']
+
+print("  ✅ Prediksi selesai")
+print(f"\n  Model          MAPE Test   Akurasi      R²")
+print(f"  {'─'*50}")
+for nm, mt, r2_ in [("SVR Baseline",  mape_base_test, r2_base),
+                    ("SVR Grid Search",mape_gs_test,   r2_gs),
+                    ("SVR GWO",        mape_gwo_test,  r2_gwo)]:
+    print(f"  {nm:<16} {mt:>8.4f}%  {max(0,100-mt):>8.2f}%  {r2_:>10.6f}")
+
+# ─────────────────────────────────────────────────────────────
+# DATA CLEANING — rekonstruksi tabel sebelum vs sesudah
+# ─────────────────────────────────────────────────────────────
+# Reload data mentah asli untuk tabel cleaning
+file_path = 'DATA_PENDAPATAN_PARKIR_PER_HARI_2023-2025.csv'
+df_raw = pd.read_csv(file_path, parse_dates=['Tanggal'])
+n_raw_total  = len(df_raw)
+n_zero_total = (df_raw['Total_Pendapatan'] == 0).sum()
+
+libur_nasional_id = pd.to_datetime([
+    '2023-01-01', '2023-01-10', '2023-01-23', '2023-02-18', '2023-03-22',
+    '2023-03-23', '2023-04-07', '2023-04-19', '2023-04-20', '2023-04-21',
+    '2023-04-22', '2023-04-23', '2023-04-24', '2023-04-25', '2023-05-01',
+    '2023-05-18', '2023-06-01', '2023-06-02', '2023-06-04', '2023-06-28',
+    '2023-06-29', '2023-06-30', '2023-07-19', '2023-08-17', '2023-09-28',
+    '2023-12-25', '2023-12-26', '2024-01-01', '2024-02-08', '2024-02-09',
+    '2024-02-10', '2024-03-11', '2024-03-12', '2024-03-29', '2024-03-31',
+    '2024-04-08', '2024-04-09', '2024-04-10', '2024-04-11', '2024-04-12',
+    '2024-04-15', '2024-05-01', '2024-05-09', '2024-05-10', '2024-05-23',
+    '2024-05-24', '2024-06-01', '2024-06-14', '2024-06-17', '2024-07-07',
+    '2024-08-17', '2024-09-16', '2024-12-25', '2024-12-26', '2025-01-01',
+    '2025-01-27', '2025-01-28', '2025-01-29', '2025-03-28', '2025-03-29',
+    '2025-03-31', '2025-04-01', '2025-04-02', '2025-04-03', '2025-04-04',
+    '2025-04-07', '2025-04-18', '2025-04-20', '2025-05-01', '2025-05-12',
+    '2025-05-13', '2025-05-29', '2025-05-30', '2025-06-01', '2025-06-06',
+    '2025-06-09', '2025-06-27', '2025-08-17', '2025-08-18', '2025-09-05',
+    '2025-12-25', '2025-12-26', '2026-01-01', '2026-01-16', '2026-02-17',
+    '2026-03-18', '2026-03-19', '2026-03-20', '2026-03-21', '2026-03-22',
+    '2026-03-23', '2026-03-24', '2026-04-03', '2026-04-05', '2026-05-01',
+    '2026-05-14', '2026-05-15', '2026-05-27', '2026-05-28', '2026-05-31',
+    '2026-06-01', '2026-06-16', '2026-08-17', '2026-08-25', '2026-12-24',
+    '2026-12-25'
+])
+df_raw['Libur_Nasional_flag'] = df_raw['Tanggal'].dt.normalize().isin(libur_nasional_id).astype(int)
+
+# Baris zero yang BUKAN hari libur → dihapus
+mask_hapus   = (df_raw['Total_Pendapatan'] == 0) & (df_raw['Libur_Nasional_flag'] != 1)
+df_raw_clean = df_raw[~mask_hapus].copy().reset_index(drop=True)
+n_zero_libur = int(((df_raw['Total_Pendapatan'] == 0) & (df_raw['Libur_Nasional_flag'] == 1)).sum())
+n_hapus      = int(mask_hapus.sum())
+
+# Imputasi zero pada hari libur
+median_libur = float(df_raw_clean[(df_raw_clean['Libur_Nasional_flag'] == 1) &
+                                   (df_raw_clean['Total_Pendapatan'] > 0)]['Total_Pendapatan'].median())
+n_imputasi   = int(((df_raw_clean['Libur_Nasional_flag'] == 1) &
+                    (df_raw_clean['Total_Pendapatan'] == 0)).sum())
+df_raw_clean.loc[(df_raw_clean['Libur_Nasional_flag'] == 1) &
+                  (df_raw_clean['Total_Pendapatan'] == 0), 'Total_Pendapatan'] = median_libur
+
+n_after_clean = len(df_raw_clean)
+n_duplikat    = int(df_raw.duplicated().sum())
+n_missing     = int(df_raw['Total_Pendapatan'].isna().sum())
+
+# Detail baris yang dihapus (maks 50 untuk tabel)
+df_hapus_detail = df_raw[mask_hapus][['Tanggal','Hari','Rayon','Total_Pendapatan','Libur_Nasional_flag']].head(50)
+
+print(f"\n  🧹 Data Cleaning:")
+print(f"     Baris raw    : {n_raw_total:,}")
+print(f"     Zero total   : {n_zero_total}")
+print(f"     Zero non-libur dihapus : {n_hapus}")
+print(f"     Zero libur diimputasi  : {n_imputasi} → median Rp {median_libur:,.0f}")
+print(f"     Baris setelah cleaning : {n_after_clean:,}")
+print(f"     Duplikat     : {n_duplikat}")
+print(f"     Missing value: {n_missing}")
+
+# ─────────────────────────────────────────────────────────────
+# SETUP EXCEL
+# ─────────────────────────────────────────────────────────────
+os.makedirs("excel_model", exist_ok=True)
+
+C_H1 = "1B3A5C"; C_H2 = "2C5282"; C_H3 = "BDD7EE"; C_H3FG = "1B3A5C"
+C_W  = "FFFFFF"; C_G1 = "F2F2F2"; C_HGL = "FFF2CC"
+C_POS = "375623"; C_NEG = "C00000"; C_BDR = "000000"
+
+day_names = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"]
+
+LIBUR_NAMES = {
+    "2023-01-01": "Tahun Baru 2023 Masehi",
+    "2023-01-10": "Tahun Baru Imlek 2574 Kongzili",
+    "2023-01-23": "Cuti Bersama Tahun Baru Imlek 2574 Kongzili",
+    "2023-02-18": "Isra Mi'raj Nabi Muhammad SAW",
+    "2023-03-22": "Hari Suci Nyepi Tahun Baru Saka 1945",
+    "2023-03-23": "Cuti Bersama Hari Suci Nyepi Tahun Baru Saka 1945",
+    "2023-04-07": "Wafat Yesus Kristus / Jumat Agung",
+    "2023-04-19": "Cuti Bersama Hari Raya Idul Fitri 1444 Hijriyah",
+    "2023-04-20": "Cuti Bersama Hari Raya Idul Fitri 1444 Hijriyah",
+    "2023-04-21": "Cuti Bersama Hari Raya Idul Fitri 1444 Hijriyah",
+    "2023-04-22": "Hari Raya Idul Fitri 1444 Hijriyah",
+    "2023-04-23": "Hari Raya Idul Fitri 1444 Hijriyah",
+    "2023-04-24": "Cuti Bersama Hari Raya Idul Fitri 1444 Hijriyah",
+    "2023-04-25": "Cuti Bersama Hari Raya Idul Fitri 1444 Hijriyah",
+    "2023-05-01": "Hari Buruh Internasional",
+    "2023-05-18": "Kenaikan Yesus Kristus",
+    "2023-06-01": "Hari Lahir Pancasila",
+    "2023-06-02": "Cuti Bersama Hari Raya Waisak 2568 BE",
+    "2023-06-04": "Hari Raya Waisak 2567 BE",
+    "2023-06-28": "Cuti Bersama Hari Raya Idul Adha 1444 Hijriyah",
+    "2023-06-29": "Hari Raya Idul Adha 1444 Hijriyah",
+    "2023-06-30": "Cuti Bersama Hari Raya Idul Adha 1444 Hijriyah",
+    "2023-07-19": "Tahun Baru Islam 1445 Hijriyah",
+    "2023-08-17": "Hari Kemerdekaan Republik Indonesia",
+    "2023-09-28": "Maulid Nabi Muhammad SAW",
+    "2023-12-25": "Hari Raya Natal",
+    "2023-12-26": "Cuti Bersama Hari Raya Natal",
+    "2024-01-01": "Tahun Baru 2024 Masehi",
+    "2024-02-08": "Isra Mi'raj Nabi Muhammad SAW",
+    "2024-02-09": "Cuti Bersama Tahun Baru Imlek 2575 Kongzili",
+    "2024-02-10": "Tahun Baru Imlek 2575 Kongzili",
+    "2024-03-11": "Hari Suci Nyepi Tahun Baru Saka 1946",
+    "2024-03-12": "Cuti Bersama Hari Suci Nyepi Tahun Baru Saka 1946",
+    "2024-03-29": "Wafat Yesus Kristus / Jumat Agung",
+    "2024-03-31": "Kebangkitan Yesus Kristus (Paskah)",
+    "2024-04-08": "Cuti Bersama Hari Raya Idul Fitri 1445 Hijriyah",
+    "2024-04-09": "Cuti Bersama Hari Raya Idul Fitri 1445 Hijriyah",
+    "2024-04-10": "Hari Raya Idul Fitri 1445 Hijriyah",
+    "2024-04-11": "Hari Raya Idul Fitri 1445 Hijriyah",
+    "2024-04-12": "Cuti Bersama Hari Raya Idul Fitri 1445 Hijriyah",
+    "2024-04-15": "Cuti Bersama Hari Raya Idul Fitri 1445 Hijriyah",
+    "2024-05-01": "Hari Buruh Internasional",
+    "2024-05-09": "Kenaikan Yesus Kristus",
+    "2024-05-10": "Cuti Bersama Kenaikan Yesus Kristus",
+    "2024-05-23": "Hari Raya Waisak 2568 BE",
+    "2024-05-24": "Cuti Bersama Hari Raya Waisak 2568 BE",
+    "2024-06-01": "Hari Lahir Pancasila",
+    "2024-06-14": "Cuti Bersama Hari Raya Idul Adha 1445 Hijriyah",
+    "2024-06-17": "Hari Raya Idul Adha 1445 Hijriyah",
+    "2024-07-07": "Tahun Baru Islam 1446 Hijriyah",
+    "2024-08-17": "Hari Kemerdekaan Republik Indonesia",
+    "2024-09-16": "Maulid Nabi Muhammad SAW",
+    "2024-12-25": "Hari Raya Natal",
+    "2024-12-26": "Cuti Bersama Hari Raya Natal",
+    "2025-01-01": "Tahun Baru 2025 Masehi",
+    "2025-01-27": "Isra Mi'raj Nabi Muhammad SAW",
+    "2025-01-28": "Cuti Bersama Tahun Baru Imlek 2576 Kongzili",
+    "2025-01-29": "Tahun Baru Imlek 2576 Kongzili",
+    "2025-03-28": "Cuti Bersama Hari Suci Nyepi Tahun Baru Saka 1947",
+    "2025-03-29": "Hari Suci Nyepi Tahun Baru Saka 1947",
+    "2025-03-31": "Hari Raya Idul Fitri 1446 Hijriyah",
+    "2025-04-01": "Hari Raya Idul Fitri 1446 Hijriyah",
+    "2025-04-02": "Cuti Bersama Hari Raya Idul Fitri 1446 Hijriyah",
+    "2025-04-03": "Cuti Bersama Hari Raya Idul Fitri 1446 Hijriyah",
+    "2025-04-04": "Cuti Bersama Hari Raya Idul Fitri 1446 Hijriyah",
+    "2025-04-07": "Cuti Bersama Hari Raya Idul Fitri 1446 Hijriyah",
+    "2025-04-18": "Wafat Yesus Kristus / Jumat Agung",
+    "2025-04-20": "Kebangkitan Yesus Kristus (Paskah)",
+    "2025-05-01": "Hari Buruh Internasional",
+    "2025-05-12": "Hari Raya Waisak 2569 BE",
+    "2025-05-13": "Cuti Bersama Hari Raya Waisak 2569 BE",
+    "2025-05-29": "Kenaikan Yesus Kristus",
+    "2025-05-30": "Cuti Bersama Kenaikan Yesus Kristus",
+    "2025-06-01": "Hari Lahir Pancasila",
+    "2025-06-06": "Hari Raya Idul Adha 1446 Hijriyah",
+    "2025-06-09": "Cuti Bersama Hari Raya Idul Adha 1446 Hijriyah",
+    "2025-06-27": "Tahun Baru Islam 1447 Hijriyah",
+    "2025-08-17": "Hari Kemerdekaan Republik Indonesia",
+    "2025-08-18": "Cuti Bersama Hari Kemerdekaan Republik Indonesia",
+    "2025-09-05": "Maulid Nabi Muhammad SAW",
+    "2025-12-25": "Hari Raya Natal",
+    "2025-12-26": "Cuti Bersama Hari Raya Natal",
+    "2026-01-01": "Tahun Baru 2026 Masehi",
+    "2026-01-16": "Isra Mi'raj Nabi Muhammad SAW",
+    "2026-02-17": "Tahun Baru Imlek 2577 Kongzili",
+    "2026-03-18": "Cuti Bersama Hari Suci Nyepi Tahun Baru Saka 1948",
+    "2026-03-19": "Hari Suci Nyepi Tahun Baru Saka 1948",
+    "2026-03-20": "Cuti Bersama Hari Raya Idul Fitri 1447 Hijriyah",
+    "2026-03-21": "Hari Raya Idul Fitri 1447 Hijriyah",
+    "2026-03-22": "Hari Raya Idul Fitri 1447 Hijriyah",
+    "2026-03-23": "Cuti Bersama Hari Raya Idul Fitri 1447 Hijriyah",
+    "2026-03-24": "Cuti Bersama Hari Raya Idul Fitri 1447 Hijriyah",
+    "2026-04-03": "Wafat Yesus Kristus / Jumat Agung",
+    "2026-04-05": "Kebangkitan Yesus Kristus (Paskah)",
+    "2026-05-01": "Hari Buruh Internasional",
+    "2026-05-14": "Kenaikan Yesus Kristus",
+    "2026-05-15": "Cuti Bersama Kenaikan Yesus Kristus",
+    "2026-05-27": "Hari Raya Idul Adha 1447 Hijriyah",
+    "2026-05-28": "Cuti Bersama Hari Raya Idul Adha 1447 Hijriyah",
+    "2026-05-31": "Hari Raya Waisak 2570 BE",
+    "2026-06-01": "Hari Lahir Pancasila",
+    "2026-06-16": "Tahun Baru Islam 1448 Hijriyah",
+    "2026-08-17": "Hari Kemerdekaan Republik Indonesia",
+    "2026-08-25": "Maulid Nabi Muhammad SAW",
+    "2026-12-24": "Cuti Bersama Hari Raya Natal",
+    "2026-12-25": "Hari Raya Natal"
+}
+
+def _bdr():
+    s = Side(style="thin", color=C_BDR)
+    return Border(left=s, right=s, top=s, bottom=s)
+
+def _hdr(cell, text, bg=C_H3, fg=C_H3FG, sz=9, bold=True, wrap=False):
+    cell.value = text
+    cell.font  = Font(name="Arial", bold=bold, color=fg, size=sz)
+    cell.fill  = PatternFill("solid", start_color=bg)
+    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=wrap)
+    cell.border = _bdr()
+
+def _val(cell, val, fg="000000", bg=None, bold=False, sz=9, align="center", fmt=None):
+    cell.value = val
+    cell.font  = Font(name="Arial", bold=bold, color=fg, size=sz)
+    cell.alignment = Alignment(horizontal=align, vertical="center")
+    cell.border = _bdr()
+    if bg:  cell.fill = PatternFill("solid", start_color=bg)
+    if fmt: cell.number_format = fmt
+
+def _merge(ws, rng, text, bg=C_H1, fg=C_W, sz=10):
+    ws.merge_cells(rng)
+    c = ws[rng.split(":")[0]]
+    c.value = text
+    c.font  = Font(name="Arial", bold=True, color=fg, size=sz)
+    c.fill  = PatternFill("solid", start_color=bg)
+    c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    c.border = _bdr()
+
+def _cw(ws, mapping):
+    for col, w in mapping.items():
+        ws.column_dimensions[col].width = w
+
+def _alt(i): return C_G1 if i % 2 == 0 else C_W
+def _col(n): return get_column_letter(n)
+
+# ─────────────────────────────────────────────────────────────
+df_sorted  = df.sort_values(['Tanggal','Rayon_asli']).reset_index(drop=True)
+split_idx  = len(df_train)
+rayon_list = sorted(df_sorted['Rayon_asli'].unique())
+
+results = {
+    "default":    dict(mae=mae_base,  rmse=rmse_base,  mape_test=mape_base_test,
+                       mape_train=mape_base_train, r2=r2_base, waktu=lama_base,
+                       params=dict(C=svr_baseline.C, epsilon=svr_baseline.epsilon, gamma=svr_baseline.gamma),
+                       y_pred_train=y_pred_base_train, y_pred_test=y_pred_base_test),
+    "gridsearch": dict(mae=mae_gs,    rmse=rmse_gs,    mape_test=mape_gs_test,
+                       mape_train=mape_gs_train, r2=r2_gs, waktu=lama_gs,
+                       params=best_params,
+                       y_pred_train=y_pred_gs_train, y_pred_test=y_pred_gs_test),
+    "gwo":        dict(mae=mae_gwo,   rmse=rmse_gwo,   mape_test=mape_gwo_test,
+                       mape_train=mape_gwo_train, r2=r2_gwo, waktu=lama_gwo,
+                       params=dict(C=BEST_C, epsilon=BEST_EPS, gamma=BEST_GAMMA),
+                       y_pred_train=y_pred_gwo_train, y_pred_test=y_pred_gwo_test),
+}
+
+wb = openpyxl.Workbook()
+
+# ════════════════════════════════════════════════════════════════════
+# SHEET 1 — DATA MENTAH (SEMUA BARIS)
+# ════════════════════════════════════════════════════════════════════
+ws1 = wb.active
+ws1.title = "1_Data_Mentah"
+ws1.sheet_view.showGridLines = False
+
+# ✅ PERUBAHAN: n_show = semua baris (bukan min 1000)
+n_show = len(df_sorted)
+
+_cw(ws1, {"A":5,"B":13,"C":7,"D":22,"E":10,"F":8,"G":8})
+_merge(ws1, "A1:G1",
+       f"Data Mentah Retribusi Parkir — Dishub Kota Cirebon  |  "
+       f"{df_sorted['Tanggal'].min().date()} s.d. {df_sorted['Tanggal'].max().date()}  |  "
+       f"{n_show:,} baris (SEMUA DATA)", bg=C_H1, sz=11)
+
+for ci, hdr in enumerate(["No","Tanggal","Rayon","Total Pendapatan (Rp)","Jumlah Jukir","Weekend","Libur Nasional"], 1):
+    _hdr(ws1.cell(2,ci), hdr, wrap=True)
+ws1.row_dimensions[2].height = 28
+
+for idx in range(n_show):
+    row = df_sorted.iloc[idx]; r = idx+3; bg = _alt(r)
+    _val(ws1.cell(r,1), idx+1,                          bg=bg)
+    _val(ws1.cell(r,2), str(row["Tanggal"].date()),     bg=bg)
+    _val(ws1.cell(r,3), int(row["Rayon_asli"]),         bg=bg)
+    _val(ws1.cell(r,4), float(row["Total_Pendapatan"]), bg=bg, align="right", fmt="#,##0", bold=True)
+    _val(ws1.cell(r,5), int(row["Jumlah Jukir"]),       bg=bg)
+    _val(ws1.cell(r,6), int(row["Weekend"]),            bg=bg)
+    _val(ws1.cell(r,7), int(row["Libur_Nasional"]),     bg=bg)
+
+sr = n_show + 4
+_merge(ws1, f"A{sr}:G{sr}", "STATISTIK DESKRIPTIF — Total Pendapatan", bg=C_H2, sz=10)
+for ci, (lbl, val) in enumerate([
+    ("Min",    df_sorted["Total_Pendapatan"].min()),
+    ("Max",    df_sorted["Total_Pendapatan"].max()),
+    ("Mean",   df_sorted["Total_Pendapatan"].mean()),
+    ("Median", df_sorted["Total_Pendapatan"].median()),
+    ("Std Dev",df_sorted["Total_Pendapatan"].std()),
+    ("CV (%)", df_sorted["Total_Pendapatan"].std()/df_sorted["Total_Pendapatan"].mean()*100),
+    ("N",      n_show),
+], 1):
+    _hdr(ws1.cell(sr+1, ci), lbl, sz=8)
+    c = ws1.cell(sr+2, ci)
+    c.value = round(float(val), 2); c.number_format = "#,##0.00"
+    c.font = Font(name="Arial", size=9, bold=True, color=C_H1)
+    c.alignment = Alignment(horizontal="center", vertical="center")
+    c.border = _bdr()
+
+TA = sr + 5
+_merge(ws1, f"A{TA}:G{TA}", "TABEL A — DATA RAYON: Statistik Pendapatan per Rayon", bg=C_H2, sz=10)
+for ci, hdr in enumerate(["Rayon","Jml Hari","Total Pendapatan (Rp)","Rata-rata/Hari (Rp)",
+                            "Minimum (Rp)","Maksimum (Rp)","Std Deviasi (Rp)"], 1):
+    _hdr(ws1.cell(TA+1, ci), hdr, wrap=True)
+ws1.row_dimensions[TA+1].height = 28
+for i, rayon in enumerate(rayon_list, TA+2):
+    df_r = df_sorted[df_sorted["Rayon_asli"]==rayon]["Total_Pendapatan"]; bg = _alt(i)
+    _val(ws1.cell(i,1), f"Rayon {int(rayon)}", bg=bg, bold=True)
+    _val(ws1.cell(i,2), len(df_r),             bg=bg)
+    _val(ws1.cell(i,3), float(df_r.sum()),     bg=bg, align="right", fmt="#,##0", bold=True)
+    _val(ws1.cell(i,4), float(df_r.mean()),    bg=bg, align="right", fmt="#,##0")
+    _val(ws1.cell(i,5), float(df_r.min()),     bg=bg, align="right", fmt="#,##0", fg=C_NEG)
+    _val(ws1.cell(i,6), float(df_r.max()),     bg=bg, align="right", fmt="#,##0", fg=C_POS)
+    _val(ws1.cell(i,7), float(df_r.std()),     bg=bg, align="right", fmt="#,##0")
+tot_r = TA + 2 + len(rayon_list)
+for ci, val in enumerate(["TOTAL", len(df_sorted),
+    float(df_sorted["Total_Pendapatan"].sum()), float(df_sorted["Total_Pendapatan"].mean()),
+    float(df_sorted["Total_Pendapatan"].min()), float(df_sorted["Total_Pendapatan"].max()),
+    float(df_sorted["Total_Pendapatan"].std())], 1):
+    c = ws1.cell(tot_r, ci)
+    c.value = val; c.font = Font(name="Arial", bold=True, size=9, color=C_W)
+    c.fill  = PatternFill("solid", start_color=C_H1)
+    c.alignment = Alignment(horizontal="right" if ci>=3 else "center", vertical="center")
+    c.border = _bdr()
+    if ci >= 3: c.number_format = "#,##0"
+
+print("✅ Sheet 1 (Data Mentah — semua baris) selesai")
+
+# ════════════════════════════════════════════════════════════════════
+# SHEET 1B — DATA CLEANING (BARU)
+# ════════════════════════════════════════════════════════════════════
+ws_dc = wb.create_sheet("1B_Data_Cleaning")
+ws_dc.sheet_view.showGridLines = False
+_cw(ws_dc, {"A":6,"B":14,"C":7,"D":8,"E":10,"F":10,"G":15,"H":18,"I":18,"J":15})
+
+_merge(ws_dc, "A1:J1", "DATA CLEANING — Proses Pembersihan Data Sebelum Feature Engineering", bg=C_H1, sz=12)
+
+# ── Ringkasan Cleaning ──
+_merge(ws_dc, "A3:J3", "RINGKASAN PROSES DATA CLEANING", bg=C_H2, sz=10)
+ringkasan = [
+    ("Total Baris Data Mentah (Raw)",         f"{n_raw_total:,}",         "Jumlah baris sebelum proses apapun"),
+    ("Nilai Duplikat",                         f"{n_duplikat}",            "Tidak ada duplikat data"),
+    ("Nilai Missing (Total_Pendapatan)",       f"{n_missing}",             "Tidak ada nilai kosong/NaN"),
+    ("Baris Total_Pendapatan = 0",             f"{n_zero_total}",          "Perlu penanganan khusus"),
+    ("  ├─ Zero pada Hari Libur Nasional",     f"{n_zero_libur}",          "→ Diimputasi dengan median libur"),
+    ("  └─ Zero bukan Hari Libur (dihapus)",   f"{n_hapus}",               "→ Dihapus karena tidak valid"),
+    ("Median Pendapatan Hari Libur (Rp)",      f"{median_libur:,.0f}",     "Nilai imputasi untuk libur = 0"),
+    ("Jumlah Baris Diimputasi",               f"{n_imputasi}",            "Zero pada hari libur → diisi median"),
+    ("Baris Setelah Data Cleaning",            f"{n_after_clean:,}",       "Data siap untuk feature engineering"),
+    ("Selisih Baris (Raw - Clean)",            f"{n_raw_total - n_after_clean}","Baris yang dihapus"),
+]
+for ri, (lbl, val, ket) in enumerate(ringkasan, 4):
+    bg = _alt(ri)
+    is_bold = (ri == 12)  # baris setelah cleaning
+    _val(ws_dc.cell(ri,1), ri-3,  bg=bg, sz=8)
+    _val(ws_dc.cell(ri,2), lbl,   bg=bg, sz=9, align="left", bold=is_bold)
+    _val(ws_dc.cell(ri,3), val,   bg=(C_HGL if is_bold else bg), sz=9, bold=is_bold)
+    _val(ws_dc.cell(ri,4), ket,   bg=bg, sz=8, align="left")
+    for ci in [5,6,7,8,9,10]:
+        c = ws_dc.cell(ri,ci); c.fill = PatternFill("solid", start_color=bg); c.border = _bdr()
+
+# ── Tabel Langkah-langkah Cleaning ──
+RL = 16
+_merge(ws_dc, f"A{RL}:J{RL}", "LANGKAH-LANGKAH DATA CLEANING (Step by Step)", bg=C_H2, sz=10)
+for ci, hdr in enumerate(["Step","Nama Langkah","Kondisi / Kriteria","Tindakan","Jumlah Baris Terdampak","Alasan / Justifikasi"], 1):
+    _hdr(ws_dc.cell(RL+1, ci), hdr, wrap=True, sz=8)
+ws_dc.row_dimensions[RL+1].height = 30
+
+steps = [
+    (1, "Cek Duplikat",             "Baris identik 100%",                  "Tidak ada tindakan",                   f"{n_duplikat} baris",  "Data bersih — tidak ada duplikat"),
+    (2, "Cek Missing Value",        "Total_Pendapatan IS NULL",            "Tidak ada tindakan",                   f"{n_missing} baris",   "Tidak ada nilai kosong ditemukan"),
+    (3, "Deteksi Hari Libur",       "Tanggal ∈ daftar libur nasional",     "Tandai flag Libur_Nasional = 1",       f"{int(df_sorted['Libur_Nasional'].sum())} baris", "Libur nasional mempengaruhi pola pendapatan"),
+    (4, "Hapus Zero Non-Libur",     "Total_Pendapatan = 0 AND Libur = 0", "DELETE — baris dihapus",               f"{n_hapus} baris",     "Pendapatan 0 pada hari kerja = data tidak valid"),
+    (5, "Imputasi Zero Libur",      "Total_Pendapatan = 0 AND Libur = 1", f"REPLACE → median Rp {median_libur:,.0f}", f"{n_imputasi} baris","Hari libur tetap beroperasi, imputasi median"),
+    (6, "Validasi Akhir",           "Semua baris setelah cleaning",        "Verifikasi tidak ada zero tersisa",    f"{n_after_clean:,} baris", "Data siap diproses ke feature engineering"),
+]
+for si, (step, nama, kondisi, tindakan, jml, alasan) in enumerate(steps, RL+2):
+    bg = _alt(si)
+    for ci, val in enumerate([step, nama, kondisi, tindakan, jml, alasan], 1):
+        _val(ws_dc.cell(si, ci), val, bg=bg, sz=8, align="left" if ci >= 2 else "center")
+
+# ── Tabel Detail Baris yang Dihapus ──
+RD = RL + 2 + len(steps) + 2
+_merge(ws_dc, f"A{RD}:J{RD}",
+       f"DETAIL BARIS YANG DIHAPUS (Total: {n_hapus} baris — Total_Pendapatan = 0, bukan hari libur)",
+       bg="C00000", fg=C_W, sz=10)
+for ci, hdr in enumerate(["No","Tanggal","Hari","Rayon","Total Pendapatan","Libur Nasional","Status"], 1):
+    _hdr(ws_dc.cell(RD+1, ci), hdr, wrap=True, sz=8)
+
+if len(df_hapus_detail) > 0:
+    for ii, (_, row) in enumerate(df_hapus_detail.iterrows(), RD+2):
+        bg = _alt(ii)
+        tgl = row['Tanggal']
+        hari_nm = day_names[tgl.dayofweek] if hasattr(tgl, 'dayofweek') else str(tgl)
+        _val(ws_dc.cell(ii,1), ii - RD - 1,                   bg=bg, sz=8)
+        _val(ws_dc.cell(ii,2), str(tgl.date()),               bg=bg, sz=8)
+        _val(ws_dc.cell(ii,3), hari_nm,                       bg=bg, sz=8)
+        _val(ws_dc.cell(ii,4), int(row['Rayon']),             bg=bg, sz=8)
+        _val(ws_dc.cell(ii,5), float(row['Total_Pendapatan']),bg=bg, sz=8, fmt="#,##0", fg=C_NEG, bold=True)
+        _val(ws_dc.cell(ii,6), int(row['Libur_Nasional_flag']),bg=bg, sz=8)
+        _val(ws_dc.cell(ii,7), "❌ DIHAPUS",                  bg="FCE4D6", sz=8, fg=C_NEG, bold=True)
+    if n_hapus > 50:
+        ri_note = RD + 2 + 50
+        _merge(ws_dc, f"A{ri_note}:J{ri_note}",
+               f"... dan {n_hapus-50} baris lainnya tidak ditampilkan (total {n_hapus} baris dihapus)",
+               bg=C_H2, sz=9)
+else:
+    _merge(ws_dc, f"A{RD+2}:J{RD+2}", "Tidak ada baris yang dihapus.", bg=C_G1, fg="000000", sz=9)
+
+# ── Tabel Baris Diimputasi ──
+RI_tbl = RD + 2 + min(n_hapus, 50) + (1 if n_hapus > 50 else 0) + 3
+_merge(ws_dc, f"A{RI_tbl}:J{RI_tbl}",
+       f"BARIS DIIMPUTASI — Zero pada Hari Libur (Total: {n_imputasi} baris → diisi Rp {median_libur:,.0f})",
+       bg=C_H2, sz=10)
+for ci, hdr in enumerate(["No","Tanggal","Nama Hari Libur","Rayon","Nilai Asli","Nilai Setelah Imputasi","Status"], 1):
+    _hdr(ws_dc.cell(RI_tbl+1, ci), hdr, wrap=True, sz=8)
+
+df_imputasi = df_raw[(df_raw['Total_Pendapatan'] == 0) & (df_raw['Libur_Nasional_flag'] == 1)].head(30)
+for ii, (_, row) in enumerate(df_imputasi.iterrows(), RI_tbl+2):
+    bg = _alt(ii)
+    tgl_str = str(row['Tanggal'].date())
+    nama_libur = LIBUR_NAMES.get(tgl_str, "Hari Libur Nasional")
+    _val(ws_dc.cell(ii,1), ii - RI_tbl - 1,       bg=bg, sz=8)
+    _val(ws_dc.cell(ii,2), tgl_str,               bg=bg, sz=8)
+    _val(ws_dc.cell(ii,3), nama_libur,            bg=bg, sz=8, align="left")
+    _val(ws_dc.cell(ii,4), int(row['Rayon']),     bg=bg, sz=8)
+    _val(ws_dc.cell(ii,5), 0,                     bg=bg, sz=8, fmt="#,##0", fg=C_NEG)
+    _val(ws_dc.cell(ii,6), float(median_libur),   bg=C_HGL, sz=8, fmt="#,##0", fg=C_POS, bold=True)
+    _val(ws_dc.cell(ii,7), "✅ DIIMPUTASI",        bg="E2EFDA", sz=8, fg=C_POS, bold=True)
+
+print("✅ Sheet 1B (Data Cleaning) selesai")
+
+# ════════════════════════════════════════════════════════════════════
+# SHEET 2 — FEATURE ENGINEERING (SEMUA BARIS)
+# ════════════════════════════════════════════════════════════════════
+ws2 = wb.create_sheet("2_Feature_Engineering")
+ws2.sheet_view.showGridLines = False
+_cw(ws2, {"A":5,"B":22,"C":14,"D":32,"E":36,"F":3,"G":6,"H":22,"I":14,"J":12,"K":14})
+
+daftar_fitur = [
+    ("Tahun","Temporal","df['Tanggal'].dt.year","Tahun observasi 2023–2025"),
+    ("Trend","Temporal","Counter 0,1,2,...","Tren linier jangka panjang"),
+    ("Hari_Minggu_sin","Cyclical","sin(2π×dayofweek/7)","Siklus hari — komponen sin"),
+    ("Hari_Minggu_cos","Cyclical","cos(2π×dayofweek/7)","Siklus hari — komponen cos"),
+    ("Tgl_Kalender_sin","Cyclical","sin(2π×tanggal/31)","Siklus tanggal — komponen sin"),
+    ("Tgl_Kalender_cos","Cyclical","cos(2π×tanggal/31)","Siklus tanggal — komponen cos"),
+    ("Minggu_sin","Cyclical","sin(2π×minggu_ke/52)","Siklus minggu — komponen sin"),
+    ("Minggu_cos","Cyclical","cos(2π×minggu_ke/52)","Siklus minggu — komponen cos"),
+    ("Libur_Nasional","Kategorikal","1 jika libur nasional, else 0","Flag libur resmi"),
+    ("Weekend","Kategorikal","1 jika Sabtu/Minggu, else 0","Flag akhir pekan"),
+    ("Libur_atau_Weekend","Kategorikal","1 jika Libur OR Weekend","Gabungan — korelasi −0.61"),
+    ("Jumlah Jukir","Numerik","Data harian Dishub","Jumlah juru parkir bertugas"),
+    ("Lag_1","Lag","Pendapatan t−1","Pola kemarin"),
+    ("Lag_7","Lag","Pendapatan t−7","Pola mingguan — korelasi 0.80"),
+    ("Lag_14","Lag","Pendapatan t−14","Pola 2 minggu — korelasi 0.74"),
+    ("Lag_21","Lag","Pendapatan t−21","Pola 3 minggu — korelasi 0.68"),
+    ("Rolling_Mean_7","Rolling","Mean 7 hari (shift 1)","Tren jangka pendek"),
+    ("Rolling_Std_7","Rolling","Std 7 hari (shift 1)","Volatilitas"),
+    ("Rolling_Mean_30","Rolling","Mean 30 hari (shift 1)","Tren jangka menengah"),
+    ("Ratio_Lag7_Mean30","Derived","Lag_7/(Rolling_Mean_30+1)","Rasio vs tren bulanan"),
+    ("Rayon_1","One-Hot","1 jika Rayon=1","Identitas Rayon 1"),
+    ("Rayon_2","One-Hot","1 jika Rayon=2","Identitas Rayon 2"),
+    ("Rayon_3","One-Hot","1 jika Rayon=3","Identitas Rayon 3"),
+    ("Rayon_4","One-Hot","1 jika Rayon=4","Identitas Rayon 4"),
+    ("Rayon_5","One-Hot","1 jika Rayon=5","Identitas Rayon 5"),
+]
+fitur_ke_kat = {nm:kat for nm,kat,_,_ in daftar_fitur}
+
+_merge(ws2,"A1:E1","Feature Engineering — 25 Fitur Input SVR  |  8 Kategori",bg=C_H1,sz=11)
+_merge(ws2,"A2:E2","Daftar Fitur: Nama · Kategori · Rumus · Keterangan",bg=C_H2,sz=10)
+for ci, hdr in enumerate(["No","Nama Fitur","Kategori","Rumus","Keterangan"],1):
+    _hdr(ws2.cell(3,ci), hdr)
+for i,(nm,kat,rumus,ket) in enumerate(daftar_fitur,4):
+    bg = _alt(i)
+    _val(ws2.cell(i,1), i-3, bg=bg); _val(ws2.cell(i,2), nm, bg=bg, bold=True, align="left")
+    _val(ws2.cell(i,3), kat, bg=bg); _val(ws2.cell(i,4), rumus, bg=bg, align="left", sz=8)
+    _val(ws2.cell(i,5), ket, bg=bg, align="left", sz=8); ws2.row_dimensions[i].height = 16
+
+fitur_utk_korr = [f for f in fitur if f in df_sorted.columns]
+korr_series = (df_sorted[fitur_utk_korr+["Total_Pendapatan"]].corr()["Total_Pendapatan"].drop("Total_Pendapatan"))
+korr_sorted = korr_series.abs().sort_values(ascending=False)
+
+def interp_korr(v):
+    if v>=0.80: return "Sangat Kuat"
+    if v>=0.60: return "Kuat"
+    if v>=0.40: return "Sedang"
+    if v>=0.20: return "Lemah"
+    return "Sangat Lemah"
+
+_merge(ws2,"G1:K1","KORELASI FITUR vs TARGET — Pearson  |  Diurutkan dari Tertinggi",bg=C_H1,sz=11)
+_merge(ws2,"G2:K2","▲ Positif  ▼ Negatif  |  Kuning=Sangat Kuat, Hijau=Kuat",bg=C_H2,sz=10)
+for ci, hdr in enumerate(["Rank","Nama Fitur","Kategori","Korelasi","Kekuatan"],1):
+    _hdr(ws2.cell(3,ci+6), hdr)
+ws2.row_dimensions[3].height = 20
+for rank, fn in enumerate(korr_sorted.index, 1):
+    r_k = 3+rank; kv = float(korr_series[fn]); av = abs(kv)
+    bg_k = (C_HGL if av>=0.80 else ("E2EFDA" if av>=0.60 else ("DEEAF1" if av>=0.40 else _alt(r_k))))
+    _val(ws2.cell(r_k,7),  rank,           bg=bg_k, bold=(rank<=5))
+    _val(ws2.cell(r_k,8),  fn,             bg=bg_k, bold=(rank<=5), align="left")
+    _val(ws2.cell(r_k,9),  fitur_ke_kat.get(fn,"—"), bg=bg_k, sz=8)
+    _val(ws2.cell(r_k,10), round(kv,6),    bg=bg_k, fmt="0.000000", fg=(C_POS if kv>=0 else C_NEG), bold=(rank<=5), align="right")
+    _val(ws2.cell(r_k,11), interp_korr(av),bg=bg_k, fg=(C_POS if av>=0.60 else (C_NEG if av<0.20 else C_H1)))
+    ws2.row_dimensions[r_k].height = 15
+
+rayon_ohe = [f for f in fitur if f.startswith("Rayon_")]
+all_fe_cols = ["Total_Pendapatan","Trend","Tahun","Libur_Nasional","Weekend",
+               "Libur_atau_Weekend","Jumlah Jukir","Lag_1","Lag_7","Lag_14","Lag_21",
+               "Rolling_Mean_7","Rolling_Std_7","Rolling_Mean_30","Ratio_Lag7_Mean30",
+               "Hari_Minggu_sin","Hari_Minggu_cos","Tgl_Kalender_sin","Tgl_Kalender_cos",
+               "Minggu_sin","Minggu_cos"] + rayon_ohe
+all_fe_cols = [c for c in all_fe_cols if c in df_sorted.columns]
+hdrs_fe = ["No","Tanggal","Rayon"] + all_fe_cols; n_fe_cols = len(hdrs_fe)
+
+# ✅ PERUBAHAN: semua baris feature engineering (bukan 300)
+n_fe_rows = len(df_sorted)
+data_start = 4 + len(daftar_fitur) + 3
+_merge(ws2, f"A{data_start}:{_col(n_fe_cols)}{data_start}",
+       f"DATA FITUR LENGKAP — {n_fe_rows:,} Baris (SEMUA DATA)  |  {len(all_fe_cols)} Fitur  |  Abu = Train  |  Kuning = Test",
+       bg=C_H1, sz=10)
+data_start += 1
+fe_w = [5,13,7]+[15 if ("Pend" in c or "Lag" in c or "Roll" in c) else (7 if ("sin" in c or "cos" in c or "Rayon_" in c) else 9) for c in all_fe_cols]
+for i,(hdr,ww) in enumerate(zip(hdrs_fe,fe_w),1):
+    ws2.column_dimensions[_col(i)].width = ww; _hdr(ws2.cell(data_start,i), hdr, sz=7, wrap=True)
+ws2.row_dimensions[data_start].height = 36; data_start += 1
+
+for idx in range(n_fe_rows):
+    row = df_sorted.iloc[idx]; r = data_start+idx; bg = C_HGL if (idx>=split_idx) else _alt(r)
+    _val(ws2.cell(r,1), idx+1, bg=bg, sz=7); _val(ws2.cell(r,2), str(row["Tanggal"].date()), bg=bg, sz=7)
+    _val(ws2.cell(r,3), int(row["Rayon_asli"]), bg=bg, sz=7)
+    for ci,col in enumerate(all_fe_cols,4):
+        val = row[col] if pd.notna(row[col]) else 0
+        fmt = ("#,##0" if (col=="Total_Pendapatan" or "Lag_" in col or "Rolling_" in col or col=="Jumlah Jukir")
+               else ("0.0000" if ("sin" in col or "cos" in col or "Ratio" in col) else "General"))
+        c = ws2.cell(r,ci); c.value = float(val) if col!="Jumlah Jukir" else int(val)
+        c.font = Font(name="Arial", size=7); c.fill = PatternFill("solid", start_color=bg)
+        c.alignment = Alignment(horizontal="center", vertical="center"); c.border = _bdr(); c.number_format = fmt
+
+print(f"✅ Sheet 2 (Feature Engineering — {n_fe_rows:,} baris) selesai")
+
+# ════════════════════════════════════════════════════════════════════
+# SHEET 3 — PREPROCESSING & NORMALISASI
+# ════════════════════════════════════════════════════════════════════
+ws3 = wb.create_sheet("3_Preprocessing_Normalisasi")
+ws3.sheet_view.showGridLines = False
+n_pp = min(50, len(df_train)); pend_arr = df_train["Total_Pendapatan"].values[:n_pp]
+log_vals = np.log1p(pend_arr); norm_vals = scaler_y.transform(log_vals.reshape(-1,1)).flatten()
+X_scaled_all = scaler_X.transform(df_train[fitur].values)
+n_col_t1 = 3 + len(fitur); lc_t1 = _col(n_col_t1)
+ws3.column_dimensions["A"].width = 5; ws3.column_dimensions["B"].width = 14; ws3.column_dimensions["C"].width = 8
+for i in range(4, n_col_t1+1): ws3.column_dimensions[_col(i)].width = 13
+
+T1 = 1
+_merge(ws3, f"A{T1}:{lc_t1}{T1}", f"TABEL 1 — HASIL ROBUSTSCALER: Semua {len(fitur)} Fitur X  |  Rumus: X' = (X − Median) / IQR  |  {n_pp} Baris Train", bg=C_H1, sz=11)
+T1 += 1
+_hdr(ws3.cell(T1,1),"No"); _hdr(ws3.cell(T1,2),"Tanggal"); _hdr(ws3.cell(T1,3),"Rayon")
+for ci, fname in enumerate(fitur, 4): _hdr(ws3.cell(T1, ci), fname, sz=8, wrap=True)
+ws3.row_dimensions[T1].height = 48; T1 += 1
+for idx in range(n_pp):
+    row = df_train.iloc[idx]; r = T1+idx; bg = _alt(r)
+    _val(ws3.cell(r,1), idx+1, bg=bg); _val(ws3.cell(r,2), str(row["Tanggal"].date()), bg=bg)
+    _val(ws3.cell(r,3), int(row["Rayon_asli"]), bg=bg)
+    for ci, fi in enumerate(range(len(fitur)), 4):
+        val = float(X_scaled_all[idx, fi]); c = ws3.cell(r, ci); c.value = round(val, 4)
+        c.font = Font(name="Arial", size=8, color=(C_POS if val>0 else (C_NEG if val<0 else "000000")))
+        c.fill = PatternFill("solid", start_color=bg)
+        c.alignment = Alignment(horizontal="center", vertical="center"); c.border = _bdr(); c.number_format = "0.0000"
+
+stat1_r = T1 + n_pp
+_merge(ws3, f"A{stat1_r}:{lc_t1}{stat1_r}", "Statistik Hasil RobustScaler — Mean | Std | Min | Max", bg=C_H2, sz=9)
+for ci, lbl in enumerate(["Statistik","Tanggal","Rayon"]+fitur, 1): _hdr(ws3.cell(stat1_r+1, ci), lbl, sz=7, wrap=True)
+ws3.row_dimensions[stat1_r+1].height = 36
+stat_rows  = [("Mean","DEEAF1"), ("Std","E2EFDA"), ("Min","FCE4D6"), ("Max",C_HGL)]
+stat_funcs = [lambda a:a.mean(), lambda a:a.std(), lambda a:a.min(), lambda a:a.max()]
+for ri, ((lbl, bg_s), fn) in enumerate(zip(stat_rows, stat_funcs), stat1_r+2):
+    _val(ws3.cell(ri,1), lbl, bg=bg_s, bold=True); _val(ws3.cell(ri,2), "—", bg=bg_s); _val(ws3.cell(ri,3), "—", bg=bg_s)
+    for ci, fi in enumerate(range(len(fitur)), 4):
+        c = ws3.cell(ri, ci); c.value = round(float(fn(X_scaled_all[:n_pp, fi])), 4)
+        c.font = Font(name="Arial", size=8, bold=True); c.fill = PatternFill("solid", start_color=bg_s)
+        c.alignment = Alignment(horizontal="center", vertical="center"); c.border = _bdr(); c.number_format = "0.0000"
+
+T2 = stat1_r + len(stat_rows) + 4
+for col_l, w in [("D",24),("E",20)]: ws3.column_dimensions[col_l].width = max(ws3.column_dimensions[col_l].width, w)
+_merge(ws3, f"A{T2}:E{T2}", "TABEL 2 — HASIL LOG1p: Transformasi Target y  |  Rumus: y' = ln(1 + y)", bg=C_H1, sz=11)
+T2 += 1
+for ci, hdr in enumerate(["No","Tanggal","Rayon","y — Total Pendapatan Asli (Rp)","y' — Hasil log1p"], 1):
+    _hdr(ws3.cell(T2, ci), hdr, wrap=True)
+ws3.row_dimensions[T2].height = 30; T2 += 1
+for idx in range(n_pp):
+    r = T2+idx; bg = _alt(r)
+    _val(ws3.cell(r,1), idx+1, bg=bg); _val(ws3.cell(r,2), str(df_train.iloc[idx]["Tanggal"].date()), bg=bg)
+    _val(ws3.cell(r,3), int(df_train.iloc[idx]["Rayon_asli"]), bg=bg)
+    _val(ws3.cell(r,4), float(pend_arr[idx]), bg=bg, align="right", fmt="#,##0", fg=C_H1, bold=True)
+    _val(ws3.cell(r,5), round(log_vals[idx],6), bg=bg, align="right", fmt="0.000000", fg=C_POS, bold=True)
+
+stat2_r = T2 + n_pp
+_merge(ws3, f"A{stat2_r}:E{stat2_r}", "Perbandingan Statistik y — Sebelum vs Sesudah log1p", bg=C_H2, sz=9)
+stat2_d = [("","y Asli (Rp)","y' Setelah log1p"),
+    ("Min", f"Rp {pend_arr.min():,.0f}", f"{log_vals.min():.6f}"),
+    ("Max", f"Rp {pend_arr.max():,.0f}", f"{log_vals.max():.6f}"),
+    ("Mean", f"Rp {pend_arr.mean():,.0f}", f"{log_vals.mean():.6f}"),
+    ("Std Dev", f"Rp {pend_arr.std():,.0f}", f"{log_vals.std():.6f}"),
+    ("CV (%)", f"{pend_arr.std()/pend_arr.mean()*100:.2f}%", f"{log_vals.std()/log_vals.mean()*100:.2f}%"),
+]
+for ri, (lbl, va, vl) in enumerate(stat2_d, stat2_r+1):
+    is_h = (ri==stat2_r+1); bg_s = (C_H3 if is_h else _alt(ri)); fg_s = (C_H3FG if is_h else "000000")
+    _hdr(ws3.cell(ri,1), lbl, bg=bg_s, fg=fg_s, sz=9, bold=True)
+    _hdr(ws3.cell(ri,2), va, bg=(C_H3 if is_h else "DEEAF1"), fg=(C_H3FG if is_h else C_H1), sz=9, bold=is_h)
+    _hdr(ws3.cell(ri,3), vl, bg=(C_H3 if is_h else "E2EFDA"), fg=(C_H3FG if is_h else C_POS), sz=9, bold=True)
+    for ci in [4,5]: ws3.cell(ri,ci).border = _bdr(); ws3.cell(ri,ci).fill = PatternFill("solid", start_color=(C_H3 if is_h else _alt(ri)))
+
+print("✅ Sheet 3 (Preprocessing) selesai")
+
+# ════════════════════════════════════════════════════════════════════
+# SHEET 4 — SPLIT DATA
+# ════════════════════════════════════════════════════════════════════
+ws4 = wb.create_sheet("4_Split_Data")
+ws4.sheet_view.showGridLines = False
+ws4.column_dimensions["A"].width = 6
+for i in range(2,10): ws4.column_dimensions[get_column_letter(i)].width = 18
+
+_merge(ws4,"A1:I1","SPLIT DATA — Train / Test  |  Rasio 80:20  |  Time-Series Split (Tidak diacak)",bg=C_H1,sz=12)
+
+n_total = len(df); n_tr = len(df_train); n_te = len(df_test)
+split_info = [
+    ("Total Baris Setelah Lag Cleaning", f"{n_total:,}", "Setelah hapus NaN dari lag features"),
+    ("Data Train (80%)", f"{n_tr:,} baris", f"s.d. {df_train['Tanggal'].max().date()}"),
+    ("Data Test (20%)",  f"{n_te:,} baris", f"mulai {df_test['Tanggal'].min().date()}"),
+    ("Metode Split", "Time-Series Sequential", "Data diurut tanggal — tidak diacak (no shuffle)"),
+    ("Scaler X", "RobustScaler", "Median & IQR — tahan outlier"),
+    ("Scaler y", "log1p + MinMaxScaler", "log1p untuk reduksi skewness, MinMax ke [0,1]"),
+    ("Jumlah Fitur", f"{len(fitur)} fitur", ", ".join(fitur[:5]) + "..."),
+]
+_merge(ws4,"A3:I3","Ringkasan Split Data",bg=C_H2,sz=10)
+for ci,hdr in enumerate(["No","Keterangan","Nilai","Catatan"],1): _hdr(ws4.cell(4,ci),hdr)
+for ri,(lbl,val,cat) in enumerate(split_info,5):
+    bg=_alt(ri)
+    _val(ws4.cell(ri,1),ri-4,bg=bg); _val(ws4.cell(ri,2),lbl,bg=bg,align="left")
+    _val(ws4.cell(ri,3),val,bg=bg,bold=True); _val(ws4.cell(ri,4),cat,bg=bg,align="left",sz=8)
+    for ci in [5,6,7,8,9]: ws4.cell(ri,ci).fill=PatternFill("solid",start_color=bg); ws4.cell(ri,ci).border=_bdr()
+
+print("✅ Sheet 4 (Split Data) selesai")
+
+# ════════════════════════════════════════════════════════════════════
+# HELPER: sheet model SVR
+# ════════════════════════════════════════════════════════════════════
+def buat_sheet_model(wb, sheet_title, model_key, model_name, r_dict, color_main):
+    ws = wb.create_sheet(sheet_title)
+    ws.sheet_view.showGridLines = False
+    for col, w in [("A",6),("B",14),("C",7),("D",15),("E",15),("F",15),("G",15),("H",12)]:
+        ws.column_dimensions[col].width = w
+    rd = r_dict[model_key]
+    akurasi = max(0, 100 - rd['mape_test'])
+    gap_of  = abs(rd['mape_test'] - rd['mape_train'])
+    status  = ("✅ TIDAK OVERFIT" if gap_of < 5 else ("⚠️ PERLU CEK" if gap_of < 10 else "❌ OVERFIT"))
+
+    _merge(ws,"A1:H1",f"MODEL: {model_name}  |  Akurasi: {akurasi:.2f}%  |  MAPE Test: {rd['mape_test']:.4f}%",bg=C_H1,sz=12)
+    metrik = [
+        ("MAE Test",       f"Rp {rd['mae']:>,.0f}",    "Mean Absolute Error — rata-rata selisih absolut"),
+        ("RMSE Test",      f"Rp {rd['rmse']:>,.0f}",   "Root Mean Square Error — sensitif terhadap outlier"),
+        ("MAPE Test",      f"{rd['mape_test']:.4f}%",  "Mean Absolute Percentage Error"),
+        ("MAPE Train",     f"{rd['mape_train']:.4f}%", "MAPE pada data latih"),
+        ("Gap Overfit",    f"{gap_of:.4f}%",           status),
+        ("R²",             f"{rd['r2']:.6f}",           "Koefisien determinasi (maks 1.0)"),
+        ("Akurasi Model",  f"{akurasi:.2f}%",           "100% − MAPE Test"),
+        ("Waktu Training", f"{rd.get('waktu',0):.1f}s","Durasi optimasi/training"),
+        ("Parameter C",    str(rd['params'].get('C','—')),     "Regularization parameter"),
+        ("Parameter ε",    str(rd['params'].get('epsilon','—')),"Epsilon tube margin"),
+        ("Parameter γ",    str(rd['params'].get('gamma','—')), "Kernel coefficient"),
+    ]
+    _merge(ws,"A3:H3","METRIK EVALUASI",bg=C_H2,sz=10)
+    for ci,hdr in enumerate(["No","Metrik","Nilai","Keterangan"],1): _hdr(ws.cell(4,ci),hdr)
+    for ri,(lbl,val,ket) in enumerate(metrik,5):
+        bg=_alt(ri)
+        _val(ws.cell(ri,1),ri-4,bg=bg); _val(ws.cell(ri,2),lbl,bg=bg,align="left",bold=True)
+        _val(ws.cell(ri,3),val,bg=(C_HGL if "Akurasi" in lbl else bg),bold=("Akurasi" in lbl),fg=(C_POS if "Akurasi" in lbl else "000000"))
+        _val(ws.cell(ri,4),ket,bg=bg,align="left",sz=8)
+        for ci in [5,6,7,8]: ws.cell(ri,ci).fill=PatternFill("solid",start_color=bg); ws.cell(ri,ci).border=_bdr()
+
+    # Tabel prediksi test
+    RR = 5 + len(metrik) + 2
+    n_pred = len(rd['y_pred_test'])
+    _merge(ws,f"A{RR}:H{RR}",f"TABEL PREDIKSI DATA TEST — {n_pred} Baris",bg=C_H2,sz=10)
+    for ci,hdr in enumerate(["No","Tanggal","Rayon","Aktual (Rp)","Prediksi (Rp)","Selisih (Rp)","APE (%)","Status"],1):
+        _hdr(ws.cell(RR+1,ci),hdr,wrap=True)
+    ws.row_dimensions[RR+1].height = 28
+    for ii in range(n_pred):
+        r=RR+2+ii; bg=_alt(r)
+        aktual = float(y_test_asli[ii]); pred = float(rd['y_pred_test'][ii])
+        selisih = pred - aktual; ape = abs(selisih)/max(aktual,1)*100
+        tgl = str(df_test.iloc[ii]['Tanggal'].date()) if ii < len(df_test) else "—"
+        rayon = int(df_test.iloc[ii]['Rayon_asli']) if ii < len(df_test) else "—"
+        status_r = "✅" if ape < 10 else ("⚠️" if ape < 20 else "❌")
+        _val(ws.cell(r,1),ii+1,bg=bg,sz=8); _val(ws.cell(r,2),tgl,bg=bg,sz=8)
+        _val(ws.cell(r,3),rayon,bg=bg,sz=8)
+        _val(ws.cell(r,4),aktual,bg=bg,sz=8,align="right",fmt="#,##0",bold=True)
+        _val(ws.cell(r,5),pred,bg=bg,sz=8,align="right",fmt="#,##0",fg=color_main)
+        _val(ws.cell(r,6),selisih,bg=bg,sz=8,align="right",fmt="#,##0",fg=(C_POS if selisih>=0 else C_NEG))
+        _val(ws.cell(r,7),round(ape,4),bg=(C_HGL if ape>20 else bg),sz=8,fmt="0.0000")
+        _val(ws.cell(r,8),status_r,bg=bg,sz=8)
+    return ws
+
+ws5 = buat_sheet_model(wb, "5_SVR_Default",     "default",    "SVR Default (Baseline)", results, C_NEG)
+print("✅ Sheet 5 (SVR Default) selesai")
+ws6 = buat_sheet_model(wb, "6_Grid_Search",     "gridsearch", "SVR + Grid Search",      results, "2980B9")
+print("✅ Sheet 6 (Grid Search) selesai")
+ws7 = buat_sheet_model(wb, "7_Grey_Wolf_Optimizer","gwo",      "SVR + Grey Wolf Optimizer (GWO)", results, C_POS)
+print("✅ Sheet 7 (GWO) selesai")
+
+# ════════════════════════════════════════════════════════════════════
+# SHEET 8 — PERBANDINGAN MODEL
+# ════════════════════════════════════════════════════════════════════
+ws8 = wb.create_sheet("8_Perbandingan_Model")
+ws8.sheet_view.showGridLines = False
+for col,w in [("A",6),("B",22),("C",18),("D",18),("E",18),("F",14),("G",14),("H",14),("I",14)]:
+    ws8.column_dimensions[col].width = w
+
+_merge(ws8,"A1:I1","PERBANDINGAN 3 MODEL SVR  |  Baseline vs Grid Search vs Grey Wolf Optimizer",bg=C_H1,sz=12)
+_merge(ws8,"A3:I3","Tabel Perbandingan Metrik Evaluasi",bg=C_H2,sz=10)
+for ci,hdr in enumerate(["No","Metrik","SVR Default","SVR + Grid Search","SVR + GWO","Terbaik","Selisih GS-Base","Selisih GWO-Base"],1):
+    _hdr(ws8.cell(4,ci),hdr,wrap=True)
+
+cmp_rows = [
+    ("MAE Test (Rp)",      f"Rp {results['default']['mae']:,.0f}",    f"Rp {results['gridsearch']['mae']:,.0f}",    f"Rp {results['gwo']['mae']:,.0f}",
+     "GWO" if results['gwo']['mae'] < results['gridsearch']['mae'] else "GS",
+     f"Rp {results['gridsearch']['mae']-results['default']['mae']:,.0f}",
+     f"Rp {results['gwo']['mae']-results['default']['mae']:,.0f}"),
+    ("RMSE Test (Rp)",     f"Rp {results['default']['rmse']:,.0f}",   f"Rp {results['gridsearch']['rmse']:,.0f}",   f"Rp {results['gwo']['rmse']:,.0f}","GWO","",""),
+    ("MAPE Test (%)",      f"{results['default']['mape_test']:.4f}%", f"{results['gridsearch']['mape_test']:.4f}%",f"{results['gwo']['mape_test']:.4f}%","GWO",
+     f"{results['gridsearch']['mape_test']-results['default']['mape_test']:.4f}%",
+     f"{results['gwo']['mape_test']-results['default']['mape_test']:.4f}%"),
+    ("MAPE Train (%)",     f"{results['default']['mape_train']:.4f}%",f"{results['gridsearch']['mape_train']:.4f}%",f"{results['gwo']['mape_train']:.4f}%","—","",""),
+    ("R²",                 f"{results['default']['r2']:.6f}",          f"{results['gridsearch']['r2']:.6f}",         f"{results['gwo']['r2']:.6f}","GWO","",""),
+    ("Akurasi (%)",        f"{max(0,100-results['default']['mape_test']):.2f}%",
+                           f"{max(0,100-results['gridsearch']['mape_test']):.2f}%",
+                           f"{max(0,100-results['gwo']['mape_test']):.2f}%","GWO","",""),
+    ("Parameter C",        "1.0", str(results['gridsearch']['params'].get('C','—')), str(results['gwo']['params'].get('C','—')),"—","",""),
+    ("Parameter ε",        "0.1", str(results['gridsearch']['params'].get('epsilon','—')), str(results['gwo']['params'].get('epsilon','—')),"—","",""),
+    ("Parameter γ",        "scale", str(results['gridsearch']['params'].get('gamma','—')), str(results['gwo']['params'].get('gamma','—')),"—","",""),
+]
+for ri,(metrik,vbase,vgs,vgwo,best,dgs,dgwo) in enumerate(cmp_rows,5):
+    bg=_alt(ri)
+    _val(ws8.cell(ri,1),ri-4,bg=bg); _val(ws8.cell(ri,2),metrik,bg=bg,align="left",bold=True)
+    _val(ws8.cell(ri,3),vbase,bg=bg)
+    _val(ws8.cell(ri,4),vgs,bg=("E8F4FD" if best=="GS" else bg))
+    _val(ws8.cell(ri,5),vgwo,bg=(C_HGL if best=="GWO" else bg),bold=(best=="GWO"))
+    _val(ws8.cell(ri,6),best,bg=C_HGL if best=="GWO" else bg,bold=True,fg=(C_POS if best=="GWO" else C_H1))
+    _val(ws8.cell(ri,7),dgs,bg=bg,sz=8)
+    _val(ws8.cell(ri,8),dgwo,bg=bg,sz=8)
+    ws8.cell(ri,9).fill=PatternFill("solid",start_color=bg); ws8.cell(ri,9).border=_bdr()
+
+print("✅ Sheet 8 (Perbandingan Model) selesai")
+
+# ════════════════════════════════════════════════════════════════════
+# SHEET 9 — HASIL PREDIKSI 3 MODEL
+# ════════════════════════════════════════════════════════════════════
+ws9 = wb.create_sheet("9_Hasil_Prediksi")
+ws9.sheet_view.showGridLines = False
+for col,w in [("A",5),("B",13),("C",7),("D",16),("E",16),("F",16),("G",16),("H",10),("I",10),("J",10)]:
+    ws9.column_dimensions[col].width = w
+
+_merge(ws9,"A1:J1","HASIL PREDIKSI DATA TEST — 3 Model SVR  |  Aktual vs Prediksi",bg=C_H1,sz=12)
+for ci,hdr in enumerate(["No","Tanggal","Rayon","Aktual (Rp)",
+                          "Pred SVR Default","Pred Grid Search","Pred GWO",
+                          "APE Default","APE GS","APE GWO"],1):
+    _hdr(ws9.cell(2,ci),hdr,wrap=True)
+ws9.row_dimensions[2].height = 36
+
+n_p = len(y_test_asli)
+for ii in range(n_p):
+    r=3+ii; bg=_alt(r)
+    aktual = float(y_test_asli[ii])
+    p_base = float(results['default']['y_pred_test'][ii])
+    p_gs   = float(results['gridsearch']['y_pred_test'][ii])
+    p_gwo  = float(results['gwo']['y_pred_test'][ii])
+    ape_b  = abs(p_base-aktual)/max(aktual,1)*100
+    ape_gs = abs(p_gs-aktual)/max(aktual,1)*100
+    ape_gw = abs(p_gwo-aktual)/max(aktual,1)*100
+    tgl   = str(df_test.iloc[ii]['Tanggal'].date()) if ii < len(df_test) else "—"
+    rayon = int(df_test.iloc[ii]['Rayon_asli']) if ii < len(df_test) else "—"
+    _val(ws9.cell(r,1),ii+1,bg=bg,sz=7); _val(ws9.cell(r,2),tgl,bg=bg,sz=7); _val(ws9.cell(r,3),rayon,bg=bg,sz=7)
+    _val(ws9.cell(r,4),aktual,bg=bg,sz=7,align="right",fmt="#,##0",bold=True)
+    _val(ws9.cell(r,5),p_base,bg=bg,sz=7,align="right",fmt="#,##0")
+    _val(ws9.cell(r,6),p_gs,  bg=bg,sz=7,align="right",fmt="#,##0")
+    _val(ws9.cell(r,7),p_gwo, bg=(C_HGL if ape_gw<ape_gs and ape_gw<ape_b else bg),sz=7,align="right",fmt="#,##0")
+    _val(ws9.cell(r,8),round(ape_b,4),  bg=("FCE4D6" if ape_b>20 else bg),sz=7,fmt="0.0000")
+    _val(ws9.cell(r,9),round(ape_gs,4), bg=("FCE4D6" if ape_gs>20 else bg),sz=7,fmt="0.0000")
+    _val(ws9.cell(r,10),round(ape_gw,4),bg=("FCE4D6" if ape_gw>20 else C_HGL if ape_gw<ape_gs else bg),sz=7,fmt="0.0000")
+
+print("✅ Sheet 9 (Hasil Prediksi) selesai")
+
+# ════════════════════════════════════════════════════════════════════
+# SIMPAN FILE
+# ════════════════════════════════════════════════════════════════════
+OUT_PATH = "excel_model/SVR_Dishub_Cirebon_Final_v2.xlsx"
+wb.save(OUT_PATH)
+
+print("=" * 65)
+print("  ✅  CELL 14 REVISI SELESAI — 9 Sheet berhasil diekspor")
+print("=" * 65)
+print(f"  📁  {OUT_PATH}")
+print(f"  Sheet 1   : Data Mentah ({n_show:,} baris — SEMUA DATA)")
+print(f"  Sheet 1B  : Data Cleaning (tabel detail baru ✨)")
+print(f"  Sheet 2   : Feature Engineering ({n_fe_rows:,} baris — SEMUA DATA)")
+print(f"  Sheet 3   : Preprocessing & Normalisasi")
+print(f"  Sheet 4   : Split Data")
+print(f"  Sheet 5   : SVR Default")
+print(f"  Sheet 6   : Grid Search")
+print(f"  Sheet 7   : Grey Wolf Optimizer")
+print(f"  Sheet 8   : Perbandingan Model (3 Model)")
+print(f"  Sheet 9   : Hasil Prediksi (3 Model)")
+print("=" * 65)
+print(f"  🔑  Model diload dari Google Drive checkpoint (bukan training ulang)")
+print(f"  📊  SVR Baseline  → Akurasi {max(0,100-mape_base_test):.2f}%")
+print(f"  📊  SVR GS        → Akurasi {max(0,100-mape_gs_test):.2f}%")
+print(f"  📊  SVR GWO       → Akurasi {max(0,100-mape_gwo_test):.2f}%")

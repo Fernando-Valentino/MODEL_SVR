@@ -158,7 +158,7 @@ def preprocess_dataset(dataset: list) -> dict:
     
     # Encoding kategorikal
     df['Libur_Nasional']     = df['Libur_Nasional'].astype(int)
-    df['Weekend']            = df['Weekend'].astype(int)
+    df['Weekend']            = (df['Tanggal'].dt.dayofweek >= 5).astype(int)
     df['Libur_atau_Weekend'] = ((df['Libur_Nasional'] == 1) | (df['Weekend'] == 1)).astype(int)
     
     # Fitur Trend
@@ -194,7 +194,7 @@ def preprocess_dataset(dataset: list) -> dict:
         df[f'Weekend_Rayon_{r_id}'] = df['Weekend'] * df[f'Rayon_{r_id}']
         
     # Sort & hapus NaN
-    df = df.sort_values(by=['Tanggal']).reset_index(drop=True)
+    df = df.sort_values(by=['Tanggal', 'Rayon_asli']).reset_index(drop=True)
     df.dropna(inplace=True)
     df.reset_index(drop=True, inplace=True)
     

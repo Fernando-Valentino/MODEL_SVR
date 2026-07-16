@@ -100,6 +100,8 @@ def roman_rayon(rayon_id: int) -> str:
 def preprocess_dataset(dataset: list) -> dict:
     df = pd.DataFrame(dataset)
     df['Tanggal'] = pd.to_datetime(df['Tanggal'])
+    libur_nasional_dt = pd.to_datetime(LIBUR_NASIONAL_ID)
+    df['Libur_Nasional'] = df['Tanggal'].dt.normalize().isin(libur_nasional_dt).astype(int)
     
     # Drop duplicates to match the Jupyter notebook exactly
     df = df.drop_duplicates(subset=['Tanggal', 'Rayon'], keep='last').reset_index(drop=True)
@@ -157,7 +159,8 @@ def preprocess_dataset(dataset: list) -> dict:
     df['Minggu_cos']       = np.cos(2 * np.pi * df['Minggu_ke'] / 52.0)
     
     # Encoding kategorikal
-    df['Libur_Nasional']     = df['Libur_Nasional'].astype(int)
+    libur_nasional_dt = pd.to_datetime(LIBUR_NASIONAL_ID)
+    df['Libur_Nasional']     = df['Tanggal'].dt.normalize().isin(libur_nasional_dt).astype(int)
     df['Weekend']            = (df['Tanggal'].dt.dayofweek >= 5).astype(int)
     df['Libur_atau_Weekend'] = ((df['Libur_Nasional'] == 1) | (df['Weekend'] == 1)).astype(int)
     

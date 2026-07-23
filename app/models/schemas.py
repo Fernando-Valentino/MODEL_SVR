@@ -17,3 +17,30 @@ class PredictionOutput(BaseModel):
     total_hari_prediksi: int
     estimasi_total_pendapatan: float
     detail_harian: List[DailyPrediction]
+
+class SeedDataItem(BaseModel):
+    Tanggal: str
+    Rayon: int
+    Total_Pendapatan: float
+    Jumlah_Jukir: Optional[int] = None
+
+class ForecastInput(BaseModel):
+    rayon_id: int = Field(default=0, ge=0, le=5)
+    horizon_days: int = Field(default=7, ge=1)
+    model_type: str = Field(default='gwo')
+    seed_data: List[SeedDataItem]
+
+class DailyForecastItem(BaseModel):
+    tanggal: str
+    rayon_id: int
+    rayon: str
+    prediksi_rp: float
+    source_features: str
+    confidence: str
+    confidence_note: str
+
+class ForecastOutput(BaseModel):
+    status: str
+    pesan: str
+    total_hari_prediksi: int
+    detail_harian: List[DailyForecastItem]

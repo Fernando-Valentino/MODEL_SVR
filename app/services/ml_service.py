@@ -7,7 +7,7 @@ import holidays as pyholidays
 from app.core.config import get_settings
 from app.core.logger import logger
 from app.core.constants import LIBUR_NASIONAL_ID, JUKIR_MAP
-from app.utils.preprocessing import extract_features_for_day
+from app.utils.preprocessing import extract_features_for_day, roman_rayon
 
 class MLService:
     def __init__(self):
@@ -146,6 +146,150 @@ class MLService:
                         "tanggal": curr_str,
                         "pendapatan": total_daily_revenue
                     })
+                
+            current_date += datetime.timedelta(days=1)
+            
+        return results
+
+    def _get_model_and_scalers(self, model_type: str):
+        """
+        Dynamically load model and scalers based on model_type:
+        - 'baseline': svr_default_model.pkl, scaler_X_default.pkl, scaler_y_default.pkl
+        - 'grid_search': svr_grid_search_model.pkl, scaler_X.pkl, scaler_y.pkl
+        - 'gwo': svr_gwo_model.pkl, scaler_X.pkl, scaler_y.pkl
+        """
+        if model_type == 'baseline':
+            m_name = 'svr_default_model.pkl'
+            s_x_name = 'scaler_X_default.pkl'
+            s_y_name = 'scaler_y_default.pkl'
+        elif model_type == 'grid_search':
+            m_name = 'svr_grid_search_model.pkl'
+            s_x_name = 'scaler_X.pkl'
+            s_y_name = 'scaler_y.pkl'
+        elif model_type == 'gwo':
+            m_name = 'svr_gwo_model.pkl'
+            s_x_name = 'scaler_X.pkl'
+            s_y_name = 'scaler_y.pkl'
+        else:
+            raise ValueError(f"Model type '{model_type}' tidak valid. Gunakan 'baseline', 'grid_search', atau 'gwo'.")
+
+        m_path = os.path.join(self.artifacts_dir, m_name)
+        if not os.path.exists(m_path):
+            if model_type in ['grid_search', 'gwo']:
+                raise ValueError(f"Model SVR [{model_type.upper()}] belum dilatih. Harap lakukan training atau optimasi model terlebih dahulu.")
+            raise ValueError(f"Berkas model {m_name} tidak ditemukan di server.")
+
+        s_x_path = os.path.join(self.artifacts_dir, s_x_name)
+        if not os.path.exists(s_x_path):
+            s_x_path = os.path.join(self.artifacts_dir, 'scaler_X_default.pkl')
+            
+        s_y_path = os.path.join(self.artifacts_dir, s_y_name)
+        if not os.path.exists(s_y_path):
+            s_y_path = os.path.join(self.artifacts_dir, 'scaler_y_default.pkl')
+
+        if not os.path.exists(s_x_path) or not os.path.exists(s_y_path):
+            raise ValueError("Berkas scaler SVR tidak ditemukan di server.")
+
+        model = joblib.load(m_path)
+        scaler_X = joblib.load(s_x_path)
+        scaler_y = joblib.load(s_y_path)
+        return model, scaler_X, scaler_y
+
+    def forecast_recursive(self, rayon_id: int, horizon_days: int, model_type: str, seed_data: list) -> list:
+        model, scaler_X, scaler_y = self._get_model_and_scalers(model_type)
+
+        if not seed_data:
+            raise ValueError("Data seed untuk forecasting kosong!")
+
+        parsed_seed = []
+        for item in seed_data:
+            tgl_obj = pd.to_datetime(item["Tanggal"])
+            parsed_seed.append({
+                'Tanggal': tgl_obj,
+                'Rayon': int(item["Rayon"]),
+                'Total_Pendapatan': float(item["Total_Pendapatan"]),
+                'Jumlah Jukir': int(item.get("Jumlah Jukir", JUKIR_MAP.get(int(item["Rayon"]), 80)))
+            })
+        
+        df_state = pd.DataFrame(parsed_seed)
+        
+        libur_nasional_id = pd.to_datetime(LIBUR_NASIONAL_ID)
+        id_holidays = pyholidays.Indonesia()
+        
+        df_state['Libur_Nasional'] = df_state['Tanggal'].dt.normalize().isin(libur_nasional_id).astype(int)
+        
+        for idx, row in df_state.iterrows():
+            tgl_str = row['Tanggal'].strftime('%Y-%m-%d')
+            is_libur = row['Libur_Nasional'] == 1 or (row['Tanggal'].to_pydatetime() in id_holidays)
+            df_state.at[idx, 'Libur_Nasional'] = 1 if is_libur else 0
+            
+        df_state['Weekend'] = (df_state['Tanggal'].dt.dayofweek >= 5).astype(int)
+        df_state = df_state.sort_values(by=['Rayon', 'Tanggal']).reset_index(drop=True)
+        
+        last_actual_date = df_state['Tanggal'].max()
+        current_date = last_actual_date + datetime.timedelta(days=1)
+        
+        results = []
+        start_forecast_date = current_date
+        end_forecast_date = last_actual_date + datetime.timedelta(days=horizon_days)
+        
+        while current_date <= end_forecast_date:
+            curr_str = current_date.strftime('%Y-%m-%d')
+            rayons_to_predict = [rayon_id] if rayon_id > 0 else range(1, 6)
+            
+            pred_vals = {}
+            for r in rayons_to_predict:
+                X_today = extract_features_for_day(curr_str, r, [], df_history_override=df_state)
+                X_scaled = scaler_X.transform(X_today)
+                pred_scaled = model.predict(X_scaled).reshape(-1, 1)
+                pred_log = scaler_y.inverse_transform(pred_scaled).flatten()
+                pred_val = np.expm1(pred_log)[0]
+                pred_val = max(0.0, float(pred_val))
+                pred_vals[r] = pred_val
+                
+            is_libur_nasional = (curr_str in LIBUR_NASIONAL_ID) or (current_date in id_holidays)
+            libur = 1 if is_libur_nasional else 0
+            weekend = 1 if current_date.weekday() >= 5 else 0
+            
+            new_rows = []
+            for r, val in pred_vals.items():
+                new_rows.append({
+                    'Tanggal': current_date,
+                    'Rayon': r,
+                    'Total_Pendapatan': val,
+                    'Libur_Nasional': libur,
+                    'Weekend': weekend,
+                    'Jumlah Jukir': JUKIR_MAP.get(r, 80)
+                })
+            df_new = pd.DataFrame(new_rows)
+            df_state = pd.concat([df_state, df_new], ignore_index=True)
+            
+            day_offset = (current_date - start_forecast_date).days + 1
+            if day_offset <= 7:
+                confidence = "Tinggi"
+                confidence_note = "Akurasi tinggi. Sangat andal karena dekat dengan data aktual terakhir."
+            elif day_offset <= 30:
+                confidence = "Cukup Tinggi"
+                confidence_note = "Akurasi cukup tinggi. Andal untuk estimasi bulanan."
+            elif day_offset <= 90:
+                confidence = "Sedang"
+                confidence_note = "Akurasi sedang. Cocok untuk estimasi triwulanan dan melihat tren."
+            else:
+                confidence = "Rendah"
+                confidence_note = "Akurasi rendah. Gunakan terutama untuk melihat kecenderungan tren jangka panjang."
+                
+            source_features = "actual" if day_offset <= 1 else "recursive"
+            
+            for r, val in pred_vals.items():
+                results.append({
+                    "tanggal": curr_str,
+                    "rayon_id": r,
+                    "rayon": f"Rayon {roman_rayon(r)}",
+                    "prediksi_rp": float(val),
+                    "source_features": source_features,
+                    "confidence": confidence,
+                    "confidence_note": confidence_note
+                })
                 
             current_date += datetime.timedelta(days=1)
             

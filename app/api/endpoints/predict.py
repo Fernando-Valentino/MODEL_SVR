@@ -7,7 +7,7 @@ import os
 import subprocess
 import json
 
-from app.models.schemas import PredictionInput, PredictionOutput, DailyPrediction
+from app.models.schemas import PredictionInput, PredictionOutput, DailyPrediction, ForecastInput, ForecastOutput
 from app.services.ml_service import ml_service
 from app.core.security import get_jwt_token
 from app.core.logger import logger
@@ -125,6 +125,43 @@ async def predict_revenue(payload: PredictionInput, token_data: dict = Depends(g
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Terjadi kesalahan pada saat memproses prediksi autoregressive: " + str(e)
+        )
+
+@router.post("/predict/forecast", response_model=ForecastOutput, summary="Recursive Forecasting N Hari ke Depan")
+async def forecast_revenue(payload: ForecastInput, token_data: dict = Depends(get_jwt_token)):
+    try:
+        logger.info(f"Menerima request Forecast dari seed data, Rayon: {payload.rayon_id or 'Semua'}, Horizon: {payload.horizon_days} hari, Model: {payload.model_type}")
+        
+        seed_list = [item.model_dump() for item in payload.seed_data]
+        for item in seed_list:
+            if "Jumlah_Jukir" in item:
+                item["Jumlah Jukir"] = item.pop("Jumlah_Jukir")
+                
+        forecast_results = ml_service.forecast_recursive(
+            rayon_id=payload.rayon_id,
+            horizon_days=payload.horizon_days,
+            model_type=payload.model_type,
+            seed_data=seed_list
+        )
+        
+        return ForecastOutput(
+            status="Sukses",
+            pesan=f"Berhasil men-generate peramalan rekursif SVR-{payload.model_type.upper()} untuk {payload.horizon_days} hari",
+            total_hari_prediksi=payload.horizon_days,
+            detail_harian=forecast_results
+        )
+        
+    except ValueError as val_err:
+        logger.error(f"Validation Error: {str(val_err)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=str(val_err)
+        )
+    except Exception as e:
+        logger.error(f"Internal Server Error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Terjadi kesalahan pada saat memproses peramalan rekursif: " + str(e)
         )
 
 @router.post("/upload-dataset", summary="Upload dataset CSV baru & Retrain Model (SVR+GWO)")

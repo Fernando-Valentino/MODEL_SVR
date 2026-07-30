@@ -1,3 +1,4 @@
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
@@ -10,7 +11,7 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     environment: str = "development"
-    model_artifacts_dir: str = "artifacts/"
+    model_artifacts_dir: str = "/tmp/artifacts/" if os.environ.get("VERCEL") or not os.access(".", os.W_OK) else "artifacts/"
 
 @lru_cache()
 def get_settings():
